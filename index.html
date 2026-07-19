@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Resume Tailor · ATS + Job Matcher</title>
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+    }
+
+    body {
+      background: #f4f7fb;
+      min-height: 100vh;
+      padding: 2rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .app-container {
+      max-width: 1280px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 600;
+      color: #0b1e33;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .subhead {
+      color: #3a5a7a;
+      margin-bottom: 2.5rem;
+      border-left: 4px solid #2a7de1;
+      padding-left: 1rem;
+      font-weight: 400;
+      font-size: 1.05rem;
+    }
+
+    .grid-2col {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 2rem;
+      margin-top: 0.5rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 24px;
+      padding: 1.8rem 1.8rem 2rem;
+      box-shadow: 0 12px 30px rgba(0, 20, 40, 0.08);
+      transition: 0.2s;
+      border: 1px solid rgba(0,0,0,0.02);
+    }
+
+    .card-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: #1a2e44;
+      margin-bottom: 1.5rem;
+      border-bottom: 2px solid #eef3f9;
+      padding-bottom: 0.75rem;
+    }
+
+    .card-title i {
+      color: #2a7de1;
+      font-size: 1.4rem;
+      width: 2rem;
+    }
+
+    .upload-zone {
+      border: 2px dashed #cbdae9;
+      border-radius: 20px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      background: #fafcff;
+      transition: 0.2s;
+      cursor: pointer;
+    }
+
+    .upload-zone:hover {
+      border-color: #2a7de1;
+      background: #f0f6ff;
+    }
+
+    .upload-zone i {
+      font-size: 3.2rem;
+      color: #3a7bd5;
+      margin-bottom: 0.5rem;
+    }
+
+    .upload-zone p {
+      color: #2f4b6e;
+      font-weight: 500;
+    }
+
+    .upload-zone small {
+      color: #6a7f9a;
+      display: block;
+      margin-top: 0.25rem;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    .file-name {
+      margin: 1rem 0 0.2rem;
+      font-weight: 500;
+      color: #0b2d4b;
+    }
+
+    .btn-primary {
+      background: #1a3a5e;
+      border: none;
+      color: white;
+      font-weight: 600;
+      padding: 0.8rem 1.8rem;
+      border-radius: 60px;
+      font-size: 1rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      cursor: pointer;
+      transition: 0.2s;
+      border: 1px solid transparent;
+      margin-top: 1.2rem;
+    }
+
+    .btn-primary i {
+      font-size: 1rem;
+    }
+
+    .btn-primary:hover {
+      background: #0f2a44;
+      transform: scale(0.98);
+      box-shadow: 0 6px 14px rgba(26, 58, 94, 0.25);
+    }
+
+    .btn-success {
+      background: #1a7a4a;
+      border: none;
+      color: white;
+      font-weight: 600;
+      padding: 0.8rem 1.8rem;
+      border-radius: 60px;
+      font-size: 1rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      cursor: pointer;
+      transition: 0.2s;
+      border: 1px solid transparent;
+      margin-top: 1.2rem;
+    }
+
+    .btn-success:hover {
+      background: #0f5e38;
+      transform: scale(0.98);
+      box-shadow: 0 6px 14px rgba(26, 122, 74, 0.25);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1.5px solid #c0d2e5;
+      color: #1a3a5e;
+      font-weight: 500;
+      padding: 0.5rem 1.4rem;
+      border-radius: 60px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: 0.2s;
+      margin-left: 0.5rem;
+    }
+
+    .btn-outline:hover {
+      border-color: #2a7de1;
+      background: #e7f0fc;
+    }
+
+    .btn-warning {
+      background: #d4770a;
+      border: none;
+      color: white;
+      font-weight: 600;
+      padding: 0.6rem 1.4rem;
+      border-radius: 60px;
+      font-size: 0.9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      transition: 0.2s;
+      border: 1px solid transparent;
+      margin-top: 0.5rem;
+    }
+
+    .btn-warning:hover {
+      background: #b86208;
+      transform: scale(0.98);
+    }
+
+    .tailor-output {
+      background: #f2f8ff;
+      border-radius: 18px;
+      padding: 1.2rem 1.5rem;
+      margin: 1.5rem 0 1rem;
+      border-left: 5px solid #2a7de1;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      max-height: 280px;
+      overflow-y: auto;
+      color: #1c2e44;
+    }
+
+    .tailor-output-placeholder {
+      color: #5a7493;
+      font-style: italic;
+      opacity: 0.7;
+    }
+
+    .job-item {
+      background: #f9fcff;
+      border-radius: 18px;
+      padding: 1.2rem 1.4rem;
+      margin-bottom: 1.2rem;
+      border: 1px solid #e2ebf5;
+      transition: 0.15s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .job-item:hover {
+      border-color: #b0cae5;
+      background: #f2f9ff;
+    }
+
+    .job-info {
+      flex: 2 1 200px;
+    }
+
+    .job-title {
+      font-weight: 600;
+      color: #0b2b44;
+      font-size: 1.1rem;
+    }
+
+    .job-company {
+      color: #3a5a7a;
+      font-weight: 500;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .job-meta {
+      display: flex;
+      gap: 1.2rem;
+      margin-top: 0.3rem;
+      font-size: 0.85rem;
+      color: #4e6f8f;
+      flex-wrap: wrap;
+    }
+
+    .chance-badge {
+      border-radius: 60px;
+      padding: 0.4rem 1.1rem;
+      font-weight: 600;
+      font-size: 0.9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+    }
+
+    .chance-high {
+      background: #d0f0da;
+      color: #0a552e;
+    }
+
+    .chance-mid {
+      background: #fcf1cf;
+      color: #8a6100;
+    }
+
+    .chance-low {
+      background: #fadad6;
+      color: #8f2c1f;
+    }
+
+    .chance-percentage {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      margin-left: 0.3rem;
+    }
+
+    .badge-icon {
+      background: #e3ecf7;
+      border-radius: 30px;
+      padding: 0.2rem 0.7rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #1a4a7a;
+    }
+
+    .flex-between {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .status-message {
+      color: #1d5a8b;
+      background: #e3effb;
+      padding: 0.6rem 1.2rem;
+      border-radius: 60px;
+      font-size: 0.9rem;
+      display: inline-block;
+    }
+
+    .footer-note {
+      margin-top: 2.2rem;
+      color: #4f6c8a;
+      font-size: 0.9rem;
+      border-top: 1px solid #d7e2ef;
+      padding-top: 1.8rem;
+      text-align: center;
+    }
+
+    .loader {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 3px solid #c7d9ec;
+      border-radius: 50%;
+      border-top: 3px solid #1a4b7a;
+      animation: spin 0.8s linear infinite;
+      margin-right: 0.6rem;
+    }
+
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    .keyword-tag {
+      display: inline-block;
+      background: #e3ecf7;
+      padding: 0.2rem 0.7rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      margin: 0.2rem 0.1rem;
+      color: #1a4a7a;
+    }
+
+    .low-chance-actions {
+      margin-top: 0.5rem;
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 800px) {
+      .grid-2col {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="app-container">
+  <div class="flex-between">
+    <div>
+      <h1><i class="fas fa-file-pen" style="color:#2a7de1;"></i> Resume AI · ATS</h1>
+      <div class="subhead">
+        <i class="fas fa-robot" style="margin-right: 0.4rem;"></i> Upload your resume · Get ATS-tailored version + match chances for each job
+      </div>
+    </div>
+    <span class="status-message" id="apiStatus"><i class="fas fa-circle" style="color:#2e9e4b; font-size: 0.6rem;"></i> Gemini API ready</span>
+  </div>
+
+  <div class="grid-2col">
+    <div class="card">
+      <div class="card-title"><i class="fas fa-upload"></i> 1. Upload & Tailor</div>
+
+      <div class="upload-zone" id="uploadZone">
+        <i class="fas fa-cloud-upload-alt"></i>
+        <p><strong>Drop your resume</strong> or click to browse</p>
+        <small>Supports .txt, .pdf, .docx (text extraction simulated)</small>
+        <input type="file" id="fileInput" accept=".txt,.pdf,.docx">
+      </div>
+
+      <div id="fileStatus" class="file-name"><i class="fas fa-file"></i> No file selected</div>
+
+      <button class="btn-primary" id="tailorBtn"><i class="fas fa-wand-magic-sparkles"></i> Tailor for ATS (Gemini)</button>
+      <button class="btn-outline" id="clearBtn"><i class="fas fa-undo-alt"></i> Clear</button>
+
+      <div class="tailor-output" id="tailorOutput">
+        <span class="tailor-output-placeholder"><i class="fas fa-pen-fancy"></i> Your ATS-tailored resume will appear here</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="fas fa-list-check"></i> 2. Job Listings & Chances</div>
+
+      <div id="jobListContainer"></div>
+
+      <div style="margin-top: 1.2rem; display: flex; gap: 0.8rem; flex-wrap: wrap;">
+        <button class="btn-primary" id="refreshJobsBtn" style="background: #264d7a;"><i class="fas fa-arrows-rotate"></i> Refresh chances</button>
+        <span style="font-size: 0.9rem; color:#385d82; align-self:center;"><i class="fas fa-chart-simple"></i> based on tailored resume</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <i class="fas fa-asterisk" style="color:#3a7bd5;"></i> Using Gemini API for ATS optimization
+  </div>
+</div>
+
+<script>
+  (function() {
+    const JOB_LISTINGS = [
+      { id: 1, title: 'Frontend Engineer', company: 'VistaTech', location: 'Remote', description: 'React, TypeScript, Tailwind, ATS friendly' },
+      { id: 2, title: 'Data Analyst', company: 'CloudSphere', location: 'New York, NY', description: 'SQL, Python, Tableau, Power BI' },
+      { id: 3, title: 'Product Manager', company: 'FinBridge', location: 'Austin, TX', description: 'Agile, roadmap, stakeholder, data-driven' },
+      { id: 4, title: 'Backend Developer', company: 'AppNova', location: 'San Francisco, CA', description: 'Node.js, AWS, PostgreSQL, microservices' },
+      { id: 5, title: 'DevOps Engineer', company: 'SecureNet', location: 'Chicago, IL', description: 'Kubernetes, Docker, CI/CD, Terraform' },
+    ];
+
+    let tailoredResumeText = '';
+    let currentJobChances = {};
+
+    const fileInput = document.getElementById('fileInput');
+    const uploadZone = document.getElementById('uploadZone');
+    const fileStatus = document.getElementById('fileStatus');
+    const tailorBtn = document.getElementById('tailorBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const tailorOutput = document.getElementById('tailorOutput');
+    const jobListContainer = document.getElementById('jobListContainer');
+    const refreshJobsBtn = document.getElementById('refreshJobsBtn');
+    const apiStatus = document.getElementById('apiStatus');
+
+    async function callGeminiAPI(resumeText, jobDescriptions = '') {
+      try {
+        const response = await fetch('/api/tailor-resume', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            resumeText: resumeText,
+            jobDescriptions: jobDescriptions
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.tailored;
+        
+      } catch (error) {
+        console.error('API Error:', error);
+        throw new Error(`Failed to tailor resume: ${error.message}`);
+      }
+    }
+
+    async function generateCVFromKeywords(jobTitle, keywords) {
+      try {
+        const response = await fetch('/api/generate-cv', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jobTitle: jobTitle,
+            keywords: keywords,
+            currentResume: window.__resumeRawText || ''
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.cv;
+        
+      } catch (error) {
+        console.error('CV Generation Error:', error);
+        throw new Error(`Failed to generate CV: ${error.message}`);
+      }
+    }
+
+    function downloadCV(cvText, jobTitle) {
+      // Create a blob with the CV text
+      const blob = new Blob([cvText], { type: 'text/plain;charset=utf-8' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `CV_for_${jobTitle.replace(/\s+/g, '_')}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    }
+
+    uploadZone.addEventListener('click', () => fileInput.click());
+    uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.style.borderColor = '#2a7de1'; });
+    uploadZone.addEventListener('dragleave', () => { uploadZone.style.borderColor = '#cbdae9'; });
+    uploadZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadZone.style.borderColor = '#cbdae9';
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        handleFile(fileInput.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (fileInput.files.length) handleFile(fileInput.files[0]);
+    });
+
+    function handleFile(file) {
+      const name = file.name;
+      fileStatus.innerHTML = `<i class="fas fa-file-pdf"></i> ${name} (${(file.size/1024).toFixed(1)} KB)`;
+      
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        let content = ev.target.result;
+        const ext = name.split('.').pop().toLowerCase();
+        
+        if (ext === 'pdf' || ext === 'docx') {
+          content = `[Simulated text from ${name}] I am a software engineer with 5 years of experience in React, Node, and cloud. Skilled in Python, SQL, and agile methodologies. Looking for senior roles.`;
+          fileStatus.innerHTML = `<i class="fas fa-file-pdf"></i> ${name} (simulated text)`;
+        } else if (ext === 'txt') {
+          // keep as is
+        } else {
+          content = `[Unsupported format, using sample] Experienced developer with focus on full-stack, AWS, and team leadership.`;
+        }
+        
+        window.__resumeRawText = content;
+        tailorOutput.innerHTML = `<span style="color:#1f4870;"><i class="fas fa-check-circle" style="color:#2a7de1;"></i> File loaded. Click "Tailor for ATS" to generate.</span>`;
+      };
+      
+      reader.onerror = () => {
+        fileStatus.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:#b33;"></i> Error reading file`;
+      };
+      
+      const ext = name.split('.').pop().toLowerCase();
+      if (ext === 'txt') {
+        reader.readAsText(file);
+      } else {
+        reader.onload({ target: { result: `[Simulated content from ${name}] I am a product-minded engineer with 6 years in full-stack development, Java, Spring, and React. Strong in system design and mentoring.` } });
+        window.__resumeRawText = `[Simulated content from ${name}] I am a product-minded engineer with 6 years in full-stack development, Java, Spring, and React. Strong in system design and mentoring.`;
+        tailorOutput.innerHTML = `<span style="color:#1f4870;"><i class="fas fa-check-circle" style="color:#2a7de1;"></i> File loaded (simulated). Click "Tailor for ATS".</span>`;
+        fileStatus.innerHTML = `<i class="fas fa-file-pdf"></i> ${name} (simulated)`;
+      }
+    }
+
+    tailorBtn.addEventListener('click', async function() {
+      const raw = window.__resumeRawText;
+      if (!raw || raw.trim() === '') {
+        tailorOutput.innerHTML = `<span style="color:#b33;"><i class="fas fa-exclamation-circle"></i> Please upload a resume file first.</span>`;
+        return;
+      }
+
+      tailorOutput.innerHTML = `<span><span class="loader"></span> Contacting Gemini API ...</span>`;
+      try {
+        const jobTitles = JOB_LISTINGS.map(j => j.title).join(', ');
+        const tailored = await callGeminiAPI(raw, jobTitles);
+        tailoredResumeText = tailored;
+        tailorOutput.innerHTML = `<i class="fas fa-check-circle" style="color:#1f8b4c;"></i> ${tailored}`;
+        renderJobsWithChances(tailoredResumeText);
+      } catch (e) {
+        tailorOutput.innerHTML = `<span style="color:#b33;">Error: ${e.message || 'API error'}</span>`;
+      }
+    });
+
+    clearBtn.addEventListener('click', function() {
+      window.__resumeRawText = '';
+      tailoredResumeText = '';
+      fileStatus.innerHTML = `<i class="fas fa-file"></i> No file selected`;
+      tailorOutput.innerHTML = `<span class="tailor-output-placeholder"><i class="fas fa-pen-fancy"></i> Your ATS-tailored resume will appear here</span>`;
+      fileInput.value = '';
+      renderJobsWithChances('');
+    });
+
+    function computeChance(tailoredText, job) {
+      if (!tailoredText || tailoredText.length < 10) {
+        return { percentage: 0, label: 'N/A', class: '', icon: 'fa-minus' };
+      }
+      
+      const keywords = job.description.split(',').map(k => k.trim().toLowerCase());
+      const lowerText = tailoredText.toLowerCase();
+      let match = 0;
+      let matchedKeywords = [];
+      
+      keywords.forEach(kw => {
+        if (kw.length > 2 && lowerText.includes(kw)) {
+          match++;
+          matchedKeywords.push(kw);
+        }
+      });
+      
+      const ratio = keywords.length > 0 ? match / keywords.length : 0;
+      const percentage = Math.round(ratio * 100);
+      
+      let label, classname, icon;
+      if (percentage >= 70) {
+        label = 'High';
+        classname = 'chance-high';
+        icon = 'fa-circle-check';
+      } else if (percentage >= 40) {
+        label = 'Medium';
+        classname = 'chance-mid';
+        icon = 'fa-chart-line';
+      } else {
+        label = 'Low';
+        classname = 'chance-low';
+        icon = 'fa-circle-exclamation';
+      }
+      
+      return { 
+        percentage, 
+        label, 
+        class: classname, 
+        icon,
+        matchedKeywords,
+        totalKeywords: keywords.length
+      };
+    }
+
+    function renderJobsWithChances(tailored) {
+      let html = '';
+      JOB_LISTINGS.forEach(job => {
+        const chance = computeChance(tailored, job);
+        currentJobChances[job.id] = chance;
+        
+        const isLow = chance.percentage < 30 && chance.percentage > 0;
+        
+        html += `
+          <div class="job-item">
+            <div class="job-info">
+              <div class="job-title">${job.title}</div>
+              <div class="job-company"><i class="fas fa-building"></i> ${job.company}</div>
+              <div class="job-meta">
+                <span><i class="fas fa-map-pin"></i> ${job.location}</span>
+                <span class="badge-icon"><i class="fas fa-tag"></i> ${job.description}</span>
+              </div>
+              ${chance.percentage > 0 ? `
+                <div style="margin-top: 0.4rem; font-size: 0.8rem; color: #4a6f8f;">
+                  <i class="fas fa-key"></i> Keywords matched: 
+                  ${chance.matchedKeywords && chance.matchedKeywords.length > 0 ? 
+                    chance.matchedKeywords.map(k => `<span class="keyword-tag">${k}</span>`).join(' ') : 
+                    '<span style="color: #999;">No keywords matched</span>'
+                  }
+                </div>
+              ` : ''}
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem;">
+              <span class="chance-badge ${chance.class}">
+                <i class="fas ${chance.icon}"></i> 
+                ${chance.label} 
+                <span class="chance-percentage">${chance.percentage}%</span>
+              </span>
+              ${isLow ? `
+                <div class="low-chance-actions">
+                  <button class="btn-warning" onclick="generateAndDownloadCV(${job.id}, '${job.title}')">
+                    <i class="fas fa-file-pen"></i> Generate CV for this role
+                  </button>
+                </div>
+              ` : ''}
+              <button class="btn-outline" style="padding:0.2rem 0.9rem; font-size:0.8rem; margin-top:0.3rem;" onclick="alert('Job details for ${job.title}')">
+                <i class="fas fa-arrow-right"></i> Details
+              </button>
+            </div>
+          </div>
+        `;
+      });
+      jobListContainer.innerHTML = html || '<p style="color:#4a6f8f;">No job listings available.</p>';
+    }
+
+    // Global function for CV generation
+    window.generateAndDownloadCV = async function(jobId, jobTitle) {
+      const chance = currentJobChances[jobId];
+      if (!chance) {
+        alert('Please tailor your resume first to see job chances.');
+        return;
+      }
+      
+      // Get keywords from the job description
+      const job = JOB_LISTINGS.find(j => j.id === jobId);
+      if (!job) return;
+      
+      const keywords = job.description.split(',').map(k => k.trim());
+      
+      // Show loading state on the button
+      const button = document.querySelector(`[onclick="generateAndDownloadCV(${jobId}, '${jobTitle}')"]`);
+      if (button) {
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+        button.disabled = true;
+      }
+      
+      try {
+        const cvText = await generateCVFromKeywords(jobTitle, keywords);
+        downloadCV(cvText, jobTitle);
+        
+        if (button) {
+          button.innerHTML = '<i class="fas fa-check"></i> Downloaded!';
+          setTimeout(() => {
+            button.innerHTML = '<i class="fas fa-file-pen"></i> Generate CV for this role';
+            button.disabled = false;
+          }, 2000);
+        }
+      } catch (error) {
+        alert(`Error generating CV: ${error.message}`);
+        if (button) {
+          button.innerHTML = '<i class="fas fa-file-pen"></i> Generate CV for this role';
+          button.disabled = false;
+        }
+      }
+    };
+
+    refreshJobsBtn.addEventListener('click', function() {
+      const text = tailoredResumeText || window.__resumeRawText || '';
+      if (!text || text.trim() === '') {
+        alert('Please upload a resume and tailor it first (or click "Tailor for ATS") to get meaningful chances.');
+        renderJobsWithChances('');
+        return;
+      }
+      const useText = tailoredResumeText || window.__resumeRawText;
+      renderJobsWithChances(useText);
+    });
+
+    renderJobsWithChances('');
+    console.log('Resume Tailor with Gemini ready!');
+  })();
+</script>
+
+</body>
+</html>
