@@ -274,7 +274,7 @@ app.get('/api/health', (req, res) => {
 
 // Serve the main HTML page
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname,'index.html'));
 });
 
 // Error handling middleware
