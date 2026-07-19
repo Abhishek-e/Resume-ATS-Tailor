@@ -44,7 +44,7 @@ app.post('/api/tailor-resume', async (req, res) => {
     // ✅ FIX: Use the correct model name - 'gemini-1.5-pro' or 'gemini-1.5-flash'
     // For the latest model, use 'gemini-1.5-pro' or 'gemini-1.5-flash'
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-3.5-flash' // Changed from 'gemini-pro' to 'gemini-1.5-pro'
+      model: 'gemini-3.1-flash-lite' // Changed from 'gemini-pro' to 'gemini-1.5-pro'
     });
 
     const prompt = `
