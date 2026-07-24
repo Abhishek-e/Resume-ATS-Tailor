@@ -540,24 +540,23 @@ def generate_cv_save():
     return jsonify({"id": doc_ref.id})
 
 
-@app.route('/profile')
-@login_required
-def profile():
-    resumes = []
-    if db is not None:
-        docs = db.collection('resumes').where(filter=FieldFilter('user_id', '==', session['user_id'])).stream()
-        for d in docs:
-            data = d.to_dict()
-            data['id'] = d.id
-            resumes.append(data)
-        resumes.sort(key=lambda r: r.get('created_at') or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-    return render_template('profile.html', resumes=resumes)
+def _fetch_user_docs(collection):
+    if db is None:
+        return []
+    docs = db.collection(collection).where(filter=FieldFilter('user_id', '==', session['user_id'])).stream()
+    items = []
+    for d in docs:
+        data = d.to_dict()
+        data['id'] = d.id
+        items.append(data)
+    items.sort(key=lambda r: r.get('created_at') or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    return items
 
 
-def _get_owned_resume(resume_id):
+def _get_owned_doc(collection, doc_id):
     if db is None:
         abort(404)
-    doc = db.collection('resumes').document(resume_id).get()
+    doc = db.collection(collection).document(doc_id).get()
     if not doc.exists or doc.to_dict().get('user_id') != session['user_id']:
         abort(404)
     data = doc.to_dict()
@@ -565,10 +564,45 @@ def _get_owned_resume(resume_id):
     return data
 
 
+@app.route('/profile')
+@login_required
+def profile():
+    resumes = _fetch_user_docs('resumes')
+    cover_letters = _fetch_user_docs('cover_letters')
+    profile_details = {}
+    if db is not None:
+        user_doc = db.collection('users').document(session['user_id']).get()
+        if user_doc.exists:
+            profile_details = user_doc.to_dict().get('details') or {}
+    return render_template(
+        'profile.html', resumes=resumes, cover_letters=cover_letters, profile_details=profile_details,
+    )
+
+
+@app.route('/profile/details/save', methods=['POST'])
+@login_required
+def profile_details_save():
+    if db is None:
+        return jsonify({"error": "Database is not configured on the server."}), 503
+
+    data = request.get_json(silent=True) or {}
+    details = {
+        'full_name': (data.get('full_name') or '').strip(),
+        'id_card_number': (data.get('id_card_number') or '').strip(),
+        'college_name': (data.get('college_name') or '').strip(),
+        'location': (data.get('location') or '').strip(),
+        'github': (data.get('github') or '').strip(),
+        'linkedin': (data.get('linkedin') or '').strip(),
+        'other': (data.get('other') or '').strip(),
+    }
+    db.collection('users').document(session['user_id']).update({'details': details})
+    return jsonify({"ok": True, "details": details})
+
+
 @app.route('/resume/<resume_id>/download/pdf')
 @login_required
 def resume_download_pdf(resume_id):
-    row = _get_owned_resume(resume_id)
+    row = _get_owned_doc('resumes', resume_id)
     pdf_bytes = _html_to_pdf_bytes(_render_resume_html(row['template'], row['generated_content']))
     return send_file(
         io.BytesIO(pdf_bytes), mimetype='application/pdf',
@@ -579,13 +613,254 @@ def resume_download_pdf(resume_id):
 @app.route('/resume/<resume_id>/download/docx')
 @login_required
 def resume_download_docx(resume_id):
-    row = _get_owned_resume(resume_id)
+    row = _get_owned_doc('resumes', resume_id)
     docx_bytes = _build_resume_docx(row['template'], row['generated_content'])
     return send_file(
         io.BytesIO(docx_bytes),
         mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         as_attachment=True, download_name=f"{_slugify(row['full_name'])}.docx",
     )
+
+
+@app.route('/resume/<resume_id>/delete', methods=['POST'])
+@login_required
+def resume_delete(resume_id):
+    _get_owned_doc('resumes', resume_id)
+    db.collection('resumes').document(resume_id).delete()
+    return jsonify({"ok": True})
+
+
+# --- GENERATE COVER LETTER (BUILDER, TEMPLATES, EXPORTS, PROFILE) ---
+
+COVER_LETTER_TEMPLATES = {"modern", "classic", "minimal"}
+
+
+class CoverLetterContent(BaseModel):
+    full_name: str = ""
+    target_role: str = ""
+    company_name: str = ""
+    contact: ResumeContact = ResumeContact()
+    salutation: str = ""
+    body_paragraphs: list[str] = []
+    closing: str = ""
+
+
+def _generate_cover_letter_content(input_data):
+    prompt = f"""You are an expert cover letter writer. Write a concise, ATS-friendly
+cover letter from the candidate's raw input below, tailored to the target
+role and company. Keep it to 3-4 short paragraphs: an opening hook, why
+they're a fit (tied to the job description if given), a highlight or two
+from their background, and a confident closing call to action. Do not
+fabricate employers, achievements, or facts beyond what is given here -
+only improve the wording and structure.
+
+Candidate input:
+Full Name: {input_data.get('full_name', '')}
+Target Role: {input_data.get('target_role', '')}
+Company Name: {input_data.get('company_name', '')}
+Email: {input_data.get('email', '')}
+Phone: {input_data.get('phone', '')}
+Location: {input_data.get('location', '')}
+LinkedIn: {input_data.get('linkedin', '')}
+Portfolio: {input_data.get('portfolio', '')}
+Hiring Manager Name (optional): {input_data.get('hiring_manager', '')}
+Job Description / Key Requirements (raw, optional): {input_data.get('job_description', '')}
+Your Background / Key Achievements (raw): {input_data.get('background', '')}
+
+Use "Dear Hiring Manager," as the salutation if no hiring manager name is
+given, otherwise "Dear {{name}},". body_paragraphs is a list of 3-4
+plain-text paragraphs (no headers, no markdown). closing is a short
+sign-off phrase like "Sincerely," - do not repeat the candidate's name in
+it, that is rendered separately."""
+
+    response = genai_client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=CoverLetterContent,
+        ),
+    )
+    if response.parsed is not None:
+        return response.parsed.model_dump()
+    return json.loads(response.text)
+
+
+def _render_cover_letter_html(template, letter):
+    if template not in COVER_LETTER_TEMPLATES:
+        template = 'modern'
+    return render_template(
+        f'cover_letter_templates/{template}.html',
+        letter=letter, today=datetime.now().strftime('%B %d, %Y'),
+    )
+
+
+def _build_cover_letter_docx(template, letter):
+    doc = Document()
+    accent = _TEMPLATE_ACCENTS.get(template, _TEMPLATE_ACCENTS["modern"])
+    font_name = 'Georgia' if template == 'classic' else 'Calibri'
+
+    base_style = doc.styles['Normal']
+    base_style.font.name = font_name
+    base_style.font.size = Pt(11)
+
+    name_p = doc.add_paragraph()
+    name_run = name_p.add_run(letter.get('full_name', ''))
+    name_run.font.size = Pt(18)
+    name_run.font.bold = True
+    name_run.font.color.rgb = accent
+
+    contact = letter.get('contact') or {}
+    contact_line = ' | '.join(filter(None, [
+        contact.get('email'), contact.get('phone'), contact.get('location'),
+        contact.get('linkedin'), contact.get('portfolio'),
+    ]))
+    if contact_line:
+        doc.add_paragraph().add_run(contact_line).font.size = Pt(9.5)
+
+    doc.add_paragraph().add_run(datetime.now().strftime('%B %d, %Y')).font.size = Pt(10)
+
+    if letter.get('company_name'):
+        doc.add_paragraph().add_run(letter['company_name']).font.size = Pt(10)
+
+    doc.add_paragraph()
+
+    doc.add_paragraph(letter.get('salutation') or 'Dear Hiring Manager,')
+
+    for para in letter.get('body_paragraphs', []):
+        p = doc.add_paragraph(para)
+        p.paragraph_format.space_after = Pt(10)
+
+    doc.add_paragraph(letter.get('closing') or 'Sincerely,')
+    doc.add_paragraph(letter.get('full_name', ''))
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+@app.route('/generate-cover-letter')
+@login_required
+def generate_cover_letter():
+    return render_template('generate_cover_letter.html')
+
+
+@app.route('/generate-cover-letter/build', methods=['POST'])
+@login_required
+def generate_cover_letter_build():
+    if not genai_client:
+        return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 503
+
+    input_data = request.get_json(silent=True) or {}
+    if not (input_data.get('full_name') and input_data.get('target_role') and input_data.get('company_name')):
+        return jsonify({"error": "Full name, target role, and company name are required."}), 400
+
+    try:
+        letter = _generate_cover_letter_content(input_data)
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate cover letter: {e}"}), 502
+
+    return jsonify({"letter": letter})
+
+
+@app.route('/generate-cover-letter/render', methods=['POST'])
+@login_required
+def generate_cover_letter_render():
+    data = request.get_json(silent=True) or {}
+    return _render_cover_letter_html(data.get('template', 'modern'), data.get('letter') or {})
+
+
+@app.route('/generate-cover-letter/download/pdf', methods=['POST'])
+@login_required
+def generate_cover_letter_download_pdf():
+    data = request.get_json(silent=True) or {}
+    template = data.get('template', 'modern')
+    letter = data.get('letter') or {}
+    try:
+        pdf_bytes = _html_to_pdf_bytes(_render_cover_letter_html(template, letter))
+    except Exception as e:
+        return jsonify({"error": f"Failed to build PDF: {e}"}), 500
+    return send_file(
+        io.BytesIO(pdf_bytes), mimetype='application/pdf',
+        as_attachment=True, download_name=f"{_slugify(letter.get('full_name'))}-cover-letter.pdf",
+    )
+
+
+@app.route('/generate-cover-letter/download/docx', methods=['POST'])
+@login_required
+def generate_cover_letter_download_docx():
+    data = request.get_json(silent=True) or {}
+    template = data.get('template', 'modern')
+    letter = data.get('letter') or {}
+    try:
+        docx_bytes = _build_cover_letter_docx(template, letter)
+    except Exception as e:
+        return jsonify({"error": f"Failed to build Word document: {e}"}), 500
+    return send_file(
+        io.BytesIO(docx_bytes),
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        as_attachment=True, download_name=f"{_slugify(letter.get('full_name'))}-cover-letter.docx",
+    )
+
+
+@app.route('/generate-cover-letter/save', methods=['POST'])
+@login_required
+def generate_cover_letter_save():
+    if db is None:
+        return jsonify({"error": "Database is not configured on the server."}), 503
+
+    data = request.get_json(silent=True) or {}
+    template = data.get('template', 'modern')
+    input_data = data.get('input_data') or {}
+    letter = data.get('letter') or {}
+
+    if not letter:
+        return jsonify({"error": "No generated cover letter to save."}), 400
+
+    doc_ref = db.collection('cover_letters').document()
+    doc_ref.set({
+        'user_id': session['user_id'],
+        'template': template,
+        'full_name': letter.get('full_name', ''),
+        'target_role': letter.get('target_role', ''),
+        'company_name': letter.get('company_name', ''),
+        'input_data': input_data,
+        'generated_content': letter,
+        'created_at': firestore.SERVER_TIMESTAMP,
+    })
+
+    return jsonify({"id": doc_ref.id})
+
+
+@app.route('/cover-letter/<letter_id>/download/pdf')
+@login_required
+def cover_letter_download_pdf(letter_id):
+    row = _get_owned_doc('cover_letters', letter_id)
+    pdf_bytes = _html_to_pdf_bytes(_render_cover_letter_html(row['template'], row['generated_content']))
+    return send_file(
+        io.BytesIO(pdf_bytes), mimetype='application/pdf',
+        as_attachment=True, download_name=f"{_slugify(row['full_name'])}-cover-letter.pdf",
+    )
+
+
+@app.route('/cover-letter/<letter_id>/download/docx')
+@login_required
+def cover_letter_download_docx(letter_id):
+    row = _get_owned_doc('cover_letters', letter_id)
+    docx_bytes = _build_cover_letter_docx(row['template'], row['generated_content'])
+    return send_file(
+        io.BytesIO(docx_bytes),
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        as_attachment=True, download_name=f"{_slugify(row['full_name'])}-cover-letter.docx",
+    )
+
+
+@app.route('/cover-letter/<letter_id>/delete', methods=['POST'])
+@login_required
+def cover_letter_delete(letter_id):
+    _get_owned_doc('cover_letters', letter_id)
+    db.collection('cover_letters').document(letter_id).delete()
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

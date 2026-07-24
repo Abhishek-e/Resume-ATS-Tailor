@@ -743,6 +743,101 @@ body {
     color: #000000;
 }
 
+.delete-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background-color: transparent;
+    color: #888888;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Inter', sans-serif;
+}
+
+.delete-icon-btn:hover {
+    background-color: rgba(248, 113, 113, 0.1);
+    border-color: #f87171;
+    color: #f87171;
+}
+
+.delete-icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- PROFILE DETAILS (COLLAPSIBLE) --- */
+.details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    margin-bottom: 20px;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.details-chevron {
+    font-size: 20px;
+    color: #999999;
+    transition: transform 0.25s ease;
+    display: inline-block;
+}
+
+.details-chevron.rotated {
+    transform: rotate(-180deg);
+}
+
+.details-body {
+    max-height: 1200px;
+    overflow: hidden;
+    opacity: 1;
+    transition: max-height 0.35s ease, opacity 0.3s ease, margin 0.35s ease;
+}
+
+.details-body.collapsed {
+    max-height: 0;
+    opacity: 0;
+}
+
+.details-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px 28px;
+    background-color: #111111;
+    border: 1px solid #333333;
+    border-radius: 8px;
+    padding: 24px;
+}
+
+.details-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #888888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.details-value {
+    font-size: 15px;
+    color: #ffffff;
+    word-break: break-word;
+}
+
+@media (max-width: 768px) {
+    .details-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* --- CV BUILDER PAGE --- */
 .cv-builder-section {
     max-width: 800px;

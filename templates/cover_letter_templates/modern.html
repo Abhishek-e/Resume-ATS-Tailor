@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    @page { size: A4; margin: 40px 46px; }
+    body { font-family: Helvetica, Arial, sans-serif; color: #222222; font-size: 11.5px; line-height: 1.6; margin: 0; }
+    .name { font-size: 24px; font-weight: bold; color: #1f3a5f; margin-bottom: 2px; }
+    .role { font-size: 12.5px; color: #1f3a5f; margin-bottom: 6px; }
+    .contact { font-size: 10px; color: #555555; margin-bottom: 18px; border-bottom: 1.5px solid #1f3a5f; padding-bottom: 12px; }
+    .contact span { margin-right: 10px; }
+    .meta-line { font-size: 10.5px; color: #555555; margin-bottom: 3px; }
+    .spacer { height: 10px; }
+    .salutation { margin-bottom: 10px; }
+    .paragraph { margin-bottom: 10px; }
+    .closing { margin-top: 14px; }
+    .signature { margin-top: 2px; font-weight: bold; color: #1f3a5f; }
+</style>
+</head>
+<body>
+    <div class="name">{{ letter.get('full_name', '') }}</div>
+    {% if letter.get('target_role') %}<div class="role">{{ letter.get('target_role') }}</div>{% endif %}
+
+    {% set contact = letter.get('contact', {}) or {} %}
+    <div class="contact">
+        {% if contact.get('email') %}<span>{{ contact.get('email') }}</span>{% endif %}
+        {% if contact.get('phone') %}<span>{{ contact.get('phone') }}</span>{% endif %}
+        {% if contact.get('location') %}<span>{{ contact.get('location') }}</span>{% endif %}
+        {% if contact.get('linkedin') %}<span>{{ contact.get('linkedin') }}</span>{% endif %}
+        {% if contact.get('portfolio') %}<span>{{ contact.get('portfolio') }}</span>{% endif %}
+    </div>
+
+    <div class="meta-line">{{ today }}</div>
+    {% if letter.get('company_name') %}<div class="meta-line">{{ letter.get('company_name') }}</div>{% endif %}
+
+    <div class="spacer"></div>
+
+    <div class="salutation">{{ letter.get('salutation') or 'Dear Hiring Manager,' }}</div>
+
+    {% for para in letter.get('body_paragraphs', []) %}
+    <div class="paragraph">{{ para }}</div>
+    {% endfor %}
+
+    <div class="closing">{{ letter.get('closing') or 'Sincerely,' }}</div>
+    <div class="signature">{{ letter.get('full_name', '') }}</div>
+</body>
+</html>
