@@ -29,7 +29,7 @@
         </div>
         <div class="nav-right">
             {% if session.user_id %}
-                <span style="color: #ffffff; font-size: 14px; margin-right: 10px;">{{ session.username }}</span>
+                <a href="{{ url_for('profile') }}" style="color: #ffffff; font-size: 14px; margin-right: 10px; text-decoration: none;">{{ session.username }}</a>
                 <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
             {% else %}
                 <a href="{{ url_for('login') }}" class="nav-btn-login">Log In</a>
@@ -59,13 +59,13 @@
     <section class="cards-section">
         <div class="cards-container">
             <!-- Card 1: Generate CV -->
-            <div class="card" title="Coming Soon">
+            <a href="{{ url_for('generate_cv') }}" class="card">
                 <img src="https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&w=800&q=80" alt="Generate CV">
                 <div class="card-content">
                     <h2>Generate CV</h2>
                     <p>Create professional, ATS-friendly resumes in minutes with our AI-powered builder. Stand out from the crowd.</p>
                 </div>
-            </div>
+            </a>
 
             <!-- Card 2: Find Jobs -->
             <a href="{{ url_for('jobs') }}" class="card">

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - Resumify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
+        </div>
+        <div class="nav-center">
+            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
+        </div>
+        <div class="nav-right">
+            <a href="{{ url_for('profile') }}" class="nav-btn-login">{{ session.username }}</a>
+            <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
+        </div>
+    </nav>
+
+    <section class="jobs-hero">
+        <h1>Your Profile</h1>
+        <p class="subtitle">Signed in as <strong>{{ session.username }}</strong></p>
+    </section>
+
+    <section class="profile-section">
+        <h2 class="profile-section-title">Saved Resumes</h2>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% if resumes %}
+        <div class="resume-list">
+            {% for r in resumes %}
+            <div class="resume-row">
+                <div class="resume-info">
+                    <div class="resume-name">{{ r.full_name or 'Untitled resume' }}</div>
+                    <div class="resume-meta">{{ r.target_role or '' }}{% if r.target_role %} &middot; {% endif %}<span class="resume-template-badge">{{ r.template|capitalize }}</span> &middot; {{ r.created_at.strftime('%d %b %Y') }}</div>
+                </div>
+                <div class="resume-actions">
+                    <a href="{{ url_for('resume_download_pdf', resume_id=r.id) }}" class="resume-btn">Download PDF</a>
+                    <a href="{{ url_for('resume_download_docx', resume_id=r.id) }}" class="resume-btn">Download Word</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="jobs-empty">No resumes saved yet. <a href="{{ url_for('generate_cv') }}">Generate your first CV</a>.</p>
+        {% endif %}
+    </section>
+</body>
+</html>

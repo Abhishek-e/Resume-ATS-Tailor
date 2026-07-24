@@ -666,6 +666,180 @@ body {
     to { transform: rotate(360deg); }
 }
 
+/* --- PROFILE PAGE --- */
+.profile-section {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px 20px 100px;
+}
+
+.profile-section-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    letter-spacing: -0.5px;
+}
+
+.resume-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.resume-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    background-color: #111111;
+    border: 1px solid #333333;
+    border-radius: 8px;
+    padding: 18px 22px;
+    flex-wrap: wrap;
+}
+
+.resume-name {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.resume-meta {
+    font-size: 13px;
+    color: #999999;
+}
+
+.resume-template-badge {
+    display: inline-block;
+    background-color: #222222;
+    border: 1px solid #444444;
+    border-radius: 10px;
+    padding: 1px 9px;
+    font-size: 11px;
+    color: #cccccc;
+}
+
+.resume-actions {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.resume-btn {
+    display: inline-block;
+    padding: 10px 18px;
+    background-color: transparent;
+    color: #ffffff;
+    border: 1px solid #ffffff;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.resume-btn:hover {
+    background-color: #ffffff;
+    color: #000000;
+}
+
+/* --- CV BUILDER PAGE --- */
+.cv-builder-section {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 20px 100px;
+}
+
+.optional-tag {
+    font-weight: 400;
+    color: #777777;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 12px;
+}
+
+.cv-preview-section {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(16px);
+    transition: max-height 0.5s ease, opacity 0.5s ease, transform 0.5s ease, margin 0.5s ease;
+    margin-top: 0;
+}
+
+.cv-preview-section.visible {
+    max-height: none;
+    opacity: 1;
+    transform: translateY(0);
+    margin-top: 30px;
+    overflow: visible;
+}
+
+.cv-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.template-switcher {
+    display: flex;
+    gap: 8px;
+    background-color: #111111;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    padding: 4px;
+}
+
+.template-btn {
+    background: none;
+    border: none;
+    color: #999999;
+    padding: 8px 18px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Inter', sans-serif;
+}
+
+.template-btn.active {
+    background-color: #ffffff;
+    color: #000000;
+}
+
+.template-btn:not(.active):hover {
+    color: #ffffff;
+}
+
+.cv-preview-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.cv-preview-frame-wrap {
+    background-color: #1a1a1a;
+    border-radius: 8px;
+    padding: 24px;
+    display: flex;
+    justify-content: center;
+}
+
+.cv-preview-frame {
+    width: 100%;
+    max-width: 720px;
+    height: 850px;
+    border: none;
+    border-radius: 4px;
+    background-color: #ffffff;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+    transition: opacity 0.35s ease;
+}
+
 /* --- RESPONSIVE --- */
 @media (max-width: 768px) {
     .hero h1 {

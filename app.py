@@ -1,15 +1,25 @@
+import io
 import json
 import os
 import re
-from urllib.parse import urlparse
+from datetime import datetime, timezone
+from functools import wraps
 
-import psycopg2
-import psycopg2.extras
+import firebase_admin
+from docx import Document
+from docx.shared import Pt, RGBColor
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session
+from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
+from flask import (
+    Flask, abort, jsonify, render_template, request, redirect, url_for,
+    flash, send_file, session,
+)
 from google import genai
 from google.genai import types
+from pydantic import BaseModel
 from werkzeug.security import generate_password_hash, check_password_hash
+from xhtml2pdf import pisa
 
 load_dotenv()
 
@@ -21,26 +31,43 @@ GEMINI_MODEL = "gemini-3.5-flash"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 genai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
+RESUME_TEMPLATES = {"modern", "classic", "minimal"}
 
-def get_db_connection():
-    """
-    Connects using DATABASE_URL (provided automatically by Render when a
-    Postgres database is linked in render.yaml). Falls back to local
-    Postgres defaults for development.
-    """
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-        # Render's connection string starts with postgres:// ; psycopg2 wants postgresql://
-        if database_url.startswith("postgres://"):
-            database_url = database_url.replace("postgres://", "postgresql://", 1)
-        return psycopg2.connect(database_url)
 
-    return psycopg2.connect(
-        host=os.environ.get("DB_HOST", "localhost"),
-        user=os.environ.get("DB_USER", "postgres"),
-        password=os.environ.get("DB_PASSWORD", "postgres"),
-        dbname=os.environ.get("DB_NAME", "resumify_db"),
-    )
+def _init_firestore():
+    """
+    Loads Firebase Admin SDK credentials from either a JSON blob in
+    FIREBASE_CREDENTIALS_JSON (used on Render, set as a secret env var) or a
+    service account key file on disk (used locally). Returns None instead of
+    raising if neither is configured yet, so the rest of the app can still
+    run and surface a clear error only when a DB-backed route is hit.
+    """
+    try:
+        if not firebase_admin._apps:
+            cred_json = os.environ.get("FIREBASE_CREDENTIALS_JSON")
+            if cred_json:
+                cred = credentials.Certificate(json.loads(cred_json))
+            else:
+                cred_path = os.environ.get("FIREBASE_CREDENTIALS_PATH", "serviceAccountKey.json")
+                cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred)
+        return firestore.client()
+    except Exception as e:
+        print(f"[WARN] Firebase/Firestore not configured: {e}")
+        return None
+
+
+db = _init_firestore()
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get('user_id'):
+            flash('Please log in to continue.', 'error')
+            return redirect(url_for('login', next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
 
 
 # --- ROUTES ---
@@ -53,28 +80,26 @@ def home():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
+        if db is None:
+            flash('Database is not configured on the server.', 'error')
+            return render_template('register.html')
+
         username = request.form['username']
-        email = request.form['email']
+        email = request.form['email'].strip().lower()
         password = request.form['password']
 
-        hashed_pw = generate_password_hash(password)
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "INSERT INTO users (username, email, password) VALUES (%s, %s, %s)",
-                (username, email, hashed_pw)
-            )
-            conn.commit()
+        user_ref = db.collection('users').document(email)
+        if user_ref.get().exists:
+            flash('Email already exists.', 'error')
+        else:
+            user_ref.set({
+                'username': username,
+                'email': email,
+                'password': generate_password_hash(password),
+                'created_at': firestore.SERVER_TIMESTAMP,
+            })
             flash('Registration successful! Please login.', 'success')
             return redirect(url_for('login'))
-        except psycopg2.Error:
-            conn.rollback()
-            flash('Email already exists or database error.', 'error')
-        finally:
-            cursor.close()
-            conn.close()
 
     return render_template('register.html')
 
@@ -82,25 +107,24 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form['email']
+        email = request.form['email'].strip().lower()
         password = request.form['password']
 
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
-        user = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        user = None
+        if db is not None:
+            doc = db.collection('users').document(email).get()
+            if doc.exists:
+                user = doc.to_dict()
 
         if user and check_password_hash(user['password'], password):
-            session['user_id'] = user['id']
+            session['user_id'] = email
             session['username'] = user['username']
             flash('Login successful!', 'success')
-            return redirect(url_for('home'))
+            return redirect(request.form.get('next') or url_for('home'))
         else:
             flash('Invalid email or password.', 'error')
 
-    return render_template('login.html')
+    return render_template('login.html', next=request.args.get('next', ''))
 
 
 @app.route('/logout')
@@ -237,6 +261,331 @@ actual history is unknown. Output plain text only, no markdown symbols."""
         return jsonify({"error": f"Failed to generate CV: {e}"}), 502
 
     return jsonify({"cv": cv_text})
+
+
+# --- GENERATE CV (BUILDER, TEMPLATES, EXPORTS, PROFILE) ---
+
+class ResumeContact(BaseModel):
+    email: str = ""
+    phone: str = ""
+    location: str = ""
+    linkedin: str = ""
+    portfolio: str = ""
+
+
+class ResumeExperience(BaseModel):
+    title: str = ""
+    company: str = ""
+    dates: str = ""
+    bullets: list[str] = []
+
+
+class ResumeEducation(BaseModel):
+    degree: str = ""
+    school: str = ""
+    dates: str = ""
+
+
+class ResumeProject(BaseModel):
+    name: str = ""
+    description: str = ""
+
+
+class ResumeContent(BaseModel):
+    full_name: str = ""
+    target_role: str = ""
+    contact: ResumeContact = ResumeContact()
+    summary: str = ""
+    skills: list[str] = []
+    experience: list[ResumeExperience] = []
+    education: list[ResumeEducation] = []
+    certifications: list[str] = []
+    projects: list[ResumeProject] = []
+
+
+def _slugify(text):
+    slug = re.sub(r'[^a-zA-Z0-9]+', '-', text or '').strip('-').lower()
+    return slug or 'resume'
+
+
+def _generate_resume_content(input_data):
+    prompt = f"""You are an expert resume writer. Build an ATS-friendly resume from the
+candidate's raw input below. Rewrite experience bullets to be concise,
+action-oriented, quantified where reasonable, and keyword-rich for the
+target role. Do not fabricate employers, dates, or degrees beyond what is
+given here - only improve the wording and structure of what's provided.
+
+Candidate input:
+Full Name: {input_data.get('full_name', '')}
+Target Role: {input_data.get('target_role', '')}
+Email: {input_data.get('email', '')}
+Phone: {input_data.get('phone', '')}
+Location: {input_data.get('location', '')}
+LinkedIn: {input_data.get('linkedin', '')}
+Portfolio: {input_data.get('portfolio', '')}
+Professional Summary (raw, optional): {input_data.get('summary', '')}
+Skills (raw): {input_data.get('skills', '')}
+Work Experience (raw): {input_data.get('experience', '')}
+Education (raw): {input_data.get('education', '')}
+Certifications (raw, optional): {input_data.get('certifications', '')}
+Projects (raw, optional): {input_data.get('projects', '')}
+
+Use empty strings/arrays for fields with no data. Do not invent employers,
+dates, or degrees beyond what is given."""
+
+    response = genai_client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=ResumeContent,
+        ),
+    )
+    if response.parsed is not None:
+        return response.parsed.model_dump()
+    return json.loads(response.text)
+
+
+def _render_resume_html(template, resume):
+    if template not in RESUME_TEMPLATES:
+        template = 'modern'
+    return render_template(f'resume_templates/{template}.html', resume=resume)
+
+
+def _html_to_pdf_bytes(html):
+    buf = io.BytesIO()
+    result = pisa.CreatePDF(io.StringIO(html), dest=buf)
+    if result.err:
+        raise RuntimeError("Failed to render PDF.")
+    return buf.getvalue()
+
+
+_TEMPLATE_ACCENTS = {
+    "modern": RGBColor(0x1F, 0x3A, 0x5F),
+    "classic": RGBColor(0x00, 0x00, 0x00),
+    "minimal": RGBColor(0x33, 0x33, 0x33),
+}
+
+
+def _build_resume_docx(template, resume):
+    doc = Document()
+    accent = _TEMPLATE_ACCENTS.get(template, _TEMPLATE_ACCENTS["modern"])
+    font_name = 'Georgia' if template == 'classic' else 'Calibri'
+
+    base_style = doc.styles['Normal']
+    base_style.font.name = font_name
+    base_style.font.size = Pt(10.5)
+
+    name_p = doc.add_paragraph()
+    name_run = name_p.add_run(resume.get('full_name', ''))
+    name_run.font.size = Pt(22)
+    name_run.font.bold = True
+    name_run.font.color.rgb = accent
+
+    if resume.get('target_role'):
+        role_run = doc.add_paragraph().add_run(resume['target_role'])
+        role_run.font.size = Pt(12)
+        role_run.italic = True
+
+    contact = resume.get('contact') or {}
+    contact_line = ' | '.join(filter(None, [
+        contact.get('email'), contact.get('phone'), contact.get('location'),
+        contact.get('linkedin'), contact.get('portfolio'),
+    ]))
+    if contact_line:
+        doc.add_paragraph().add_run(contact_line).font.size = Pt(9.5)
+
+    def add_heading(text):
+        h = doc.add_paragraph()
+        run = h.add_run(text.upper())
+        run.font.bold = True
+        run.font.size = Pt(12)
+        run.font.color.rgb = accent
+        h.paragraph_format.space_before = Pt(12)
+        h.paragraph_format.space_after = Pt(2)
+
+    if resume.get('summary'):
+        add_heading('Summary')
+        doc.add_paragraph(resume['summary'])
+
+    if resume.get('skills'):
+        add_heading('Skills')
+        doc.add_paragraph(' • '.join(resume['skills']))
+
+    if resume.get('experience'):
+        add_heading('Experience')
+        for job in resume['experience']:
+            jp = doc.add_paragraph()
+            jp.add_run(f"{job.get('title', '')} — {job.get('company', '')}").bold = True
+            if job.get('dates'):
+                jp.add_run(f"   ({job['dates']})").italic = True
+            for bullet in job.get('bullets', []):
+                doc.add_paragraph(bullet, style='List Bullet')
+
+    if resume.get('education'):
+        add_heading('Education')
+        for edu in resume['education']:
+            ep = doc.add_paragraph()
+            ep.add_run(f"{edu.get('degree', '')} — {edu.get('school', '')}").bold = True
+            if edu.get('dates'):
+                ep.add_run(f"   ({edu['dates']})").italic = True
+
+    if resume.get('certifications'):
+        add_heading('Certifications')
+        for cert in resume['certifications']:
+            doc.add_paragraph(cert, style='List Bullet')
+
+    if resume.get('projects'):
+        add_heading('Projects')
+        for proj in resume['projects']:
+            pp = doc.add_paragraph()
+            pp.add_run(proj.get('name', '')).bold = True
+            if proj.get('description'):
+                doc.add_paragraph(proj['description'])
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+@app.route('/generate-cv')
+@login_required
+def generate_cv():
+    return render_template('generate_cv.html')
+
+
+@app.route('/generate-cv/build', methods=['POST'])
+@login_required
+def generate_cv_build():
+    if not genai_client:
+        return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 503
+
+    input_data = request.get_json(silent=True) or {}
+    if not (input_data.get('full_name') and input_data.get('target_role')):
+        return jsonify({"error": "Full name and target role are required."}), 400
+
+    try:
+        resume = _generate_resume_content(input_data)
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate resume: {e}"}), 502
+
+    return jsonify({"resume": resume})
+
+
+@app.route('/generate-cv/render', methods=['POST'])
+@login_required
+def generate_cv_render():
+    data = request.get_json(silent=True) or {}
+    return _render_resume_html(data.get('template', 'modern'), data.get('resume') or {})
+
+
+@app.route('/generate-cv/download/pdf', methods=['POST'])
+@login_required
+def generate_cv_download_pdf():
+    data = request.get_json(silent=True) or {}
+    template = data.get('template', 'modern')
+    resume = data.get('resume') or {}
+    try:
+        pdf_bytes = _html_to_pdf_bytes(_render_resume_html(template, resume))
+    except Exception as e:
+        return jsonify({"error": f"Failed to build PDF: {e}"}), 500
+    return send_file(
+        io.BytesIO(pdf_bytes), mimetype='application/pdf',
+        as_attachment=True, download_name=f"{_slugify(resume.get('full_name'))}.pdf",
+    )
+
+
+@app.route('/generate-cv/download/docx', methods=['POST'])
+@login_required
+def generate_cv_download_docx():
+    data = request.get_json(silent=True) or {}
+    template = data.get('template', 'modern')
+    resume = data.get('resume') or {}
+    try:
+        docx_bytes = _build_resume_docx(template, resume)
+    except Exception as e:
+        return jsonify({"error": f"Failed to build Word document: {e}"}), 500
+    return send_file(
+        io.BytesIO(docx_bytes),
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        as_attachment=True, download_name=f"{_slugify(resume.get('full_name'))}.docx",
+    )
+
+
+@app.route('/generate-cv/save', methods=['POST'])
+@login_required
+def generate_cv_save():
+    if db is None:
+        return jsonify({"error": "Database is not configured on the server."}), 503
+
+    data = request.get_json(silent=True) or {}
+    template = data.get('template', 'modern')
+    input_data = data.get('input_data') or {}
+    resume = data.get('resume') or {}
+
+    if not resume:
+        return jsonify({"error": "No generated resume to save."}), 400
+
+    doc_ref = db.collection('resumes').document()
+    doc_ref.set({
+        'user_id': session['user_id'],
+        'template': template,
+        'full_name': resume.get('full_name', ''),
+        'target_role': resume.get('target_role', ''),
+        'input_data': input_data,
+        'generated_content': resume,
+        'created_at': firestore.SERVER_TIMESTAMP,
+    })
+
+    return jsonify({"id": doc_ref.id})
+
+
+@app.route('/profile')
+@login_required
+def profile():
+    resumes = []
+    if db is not None:
+        docs = db.collection('resumes').where(filter=FieldFilter('user_id', '==', session['user_id'])).stream()
+        for d in docs:
+            data = d.to_dict()
+            data['id'] = d.id
+            resumes.append(data)
+        resumes.sort(key=lambda r: r.get('created_at') or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    return render_template('profile.html', resumes=resumes)
+
+
+def _get_owned_resume(resume_id):
+    if db is None:
+        abort(404)
+    doc = db.collection('resumes').document(resume_id).get()
+    if not doc.exists or doc.to_dict().get('user_id') != session['user_id']:
+        abort(404)
+    data = doc.to_dict()
+    data['id'] = doc.id
+    return data
+
+
+@app.route('/resume/<resume_id>/download/pdf')
+@login_required
+def resume_download_pdf(resume_id):
+    row = _get_owned_resume(resume_id)
+    pdf_bytes = _html_to_pdf_bytes(_render_resume_html(row['template'], row['generated_content']))
+    return send_file(
+        io.BytesIO(pdf_bytes), mimetype='application/pdf',
+        as_attachment=True, download_name=f"{_slugify(row['full_name'])}.pdf",
+    )
+
+
+@app.route('/resume/<resume_id>/download/docx')
+@login_required
+def resume_download_docx(resume_id):
+    row = _get_owned_resume(resume_id)
+    docx_bytes = _build_resume_docx(row['template'], row['generated_content'])
+    return send_file(
+        io.BytesIO(docx_bytes),
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        as_attachment=True, download_name=f"{_slugify(row['full_name'])}.docx",
+    )
 
 
 if __name__ == "__main__":

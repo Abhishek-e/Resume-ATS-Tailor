@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    @page { size: A4; margin: 30px 44px; }
+    body { font-family: Georgia, 'Times New Roman', serif; color: #111111; font-size: 11px; line-height: 1.55; margin: 0; }
+    .name { font-size: 24px; font-weight: bold; text-align: center; letter-spacing: 1px; margin-bottom: 2px; }
+    .role { font-size: 12px; text-align: center; font-style: italic; margin-bottom: 6px; }
+    .contact { font-size: 10px; text-align: center; color: #333333; margin-bottom: 14px; border-bottom: 1px solid #111111; padding-bottom: 10px; }
+    .contact span { margin: 0 6px; }
+    .section-title { font-size: 12.5px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-top: 16px; margin-bottom: 6px; border-bottom: 1px solid #111111; padding-bottom: 2px; }
+    .entry { margin-bottom: 10px; }
+    .entry-title { font-weight: bold; font-size: 11.5px; }
+    .entry-sub { font-style: italic; font-size: 10.5px; margin-bottom: 3px; }
+    ul { margin: 2px 0 0 0; padding-left: 18px; }
+    li { margin-bottom: 2px; }
+    .skills-line { }
+</style>
+</head>
+<body>
+    <div class="name">{{ resume.get('full_name', '') }}</div>
+    {% if resume.get('target_role') %}<div class="role">{{ resume.get('target_role') }}</div>{% endif %}
+
+    {% set contact = resume.get('contact', {}) or {} %}
+    <div class="contact">
+        {% if contact.get('email') %}<span>{{ contact.get('email') }}</span>{% endif %}
+        {% if contact.get('phone') %}<span>{{ contact.get('phone') }}</span>{% endif %}
+        {% if contact.get('location') %}<span>{{ contact.get('location') }}</span>{% endif %}
+        {% if contact.get('linkedin') %}<span>{{ contact.get('linkedin') }}</span>{% endif %}
+        {% if contact.get('portfolio') %}<span>{{ contact.get('portfolio') }}</span>{% endif %}
+    </div>
+
+    {% if resume.get('summary') %}
+    <div class="section-title">Professional Summary</div>
+    <div>{{ resume.get('summary') }}</div>
+    {% endif %}
+
+    {% if resume.get('experience') %}
+    <div class="section-title">Professional Experience</div>
+    {% for job in resume.get('experience', []) %}
+        <div class="entry">
+            <div class="entry-title">{{ job.get('title', '') }}, {{ job.get('company', '') }}</div>
+            {% if job.get('dates') %}<div class="entry-sub">{{ job.get('dates') }}</div>{% endif %}
+            <ul>
+                {% for bullet in job.get('bullets', []) %}<li>{{ bullet }}</li>{% endfor %}
+            </ul>
+        </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if resume.get('education') %}
+    <div class="section-title">Education</div>
+    {% for edu in resume.get('education', []) %}
+        <div class="entry">
+            <div class="entry-title">{{ edu.get('degree', '') }}, {{ edu.get('school', '') }}</div>
+            {% if edu.get('dates') %}<div class="entry-sub">{{ edu.get('dates') }}</div>{% endif %}
+        </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if resume.get('skills') %}
+    <div class="section-title">Skills</div>
+    <div class="skills-line">{{ resume.get('skills', []) | join(' • ') }}</div>
+    {% endif %}
+
+    {% if resume.get('certifications') %}
+    <div class="section-title">Certifications</div>
+    <ul>
+        {% for cert in resume.get('certifications', []) %}<li>{{ cert }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if resume.get('projects') %}
+    <div class="section-title">Projects</div>
+    {% for proj in resume.get('projects', []) %}
+        <div class="entry">
+            <div class="entry-title">{{ proj.get('name', '') }}</div>
+            <div>{{ proj.get('description', '') }}</div>
+        </div>
+    {% endfor %}
+    {% endif %}
+</body>
+</html>
