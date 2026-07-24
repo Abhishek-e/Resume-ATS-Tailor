@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find Jobs - Resumify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
+        </div>
+        <div class="nav-center">
+            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
+        </div>
+        <div class="nav-right">
+            {% if session.user_id %}
+                <span style="color: #ffffff; font-size: 14px; margin-right: 10px;">{{ session.username }}</span>
+                <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="nav-btn-login">Log In</a>
+                <a href="{{ url_for('register') }}" class="nav-btn-primary">Get Started</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Jobs Hero -->
+    <section class="jobs-hero">
+        <h1>Find your next role</h1>
+        <p class="subtitle">Search live job postings powered by AI, see your estimated chance of getting the job, and generate a tailored CV when you need an edge.</p>
+    </section>
+
+    <!-- Search Form -->
+    <section class="jobs-search-section">
+        <form id="job-search-form" class="jobs-search-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="job_title">Job Title / Role *</label>
+                    <input type="text" id="job_title" name="job_title" placeholder="e.g. Frontend Developer" required>
+                </div>
+                <div class="form-group">
+                    <label for="location">Location</label>
+                    <input type="text" id="location" name="location" placeholder="e.g. Remote, Bangalore">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="experience_level">Experience Level</label>
+                    <select id="experience_level" name="experience_level">
+                        <option value="">Any</option>
+                        <option value="Entry-level">Entry-level</option>
+                        <option value="Mid-level">Mid-level</option>
+                        <option value="Senior">Senior</option>
+                        <option value="Lead / Manager">Lead / Manager</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="skills">Your Skills / Experience</label>
+                <textarea id="skills" name="skills" rows="3" placeholder="e.g. 3 years React, Node.js, REST APIs, SQL... (used to estimate your match %)"></textarea>
+            </div>
+            <button type="submit" class="submit-btn" id="search-btn">Search Jobs</button>
+        </form>
+
+        <div id="jobs-status" class="jobs-status" style="display:none;"></div>
+
+        <div id="jobs-results" class="jobs-results"></div>
+    </section>
+
+    <!-- CV Modal -->
+    <div id="cv-modal" class="cv-modal-overlay" style="display:none;">
+        <div class="cv-modal">
+            <div class="cv-modal-header">
+                <h3>Tailored CV</h3>
+                <button type="button" class="cv-modal-close" id="cv-modal-close">&times;</button>
+            </div>
+            <div class="cv-modal-body" id="cv-modal-body">
+                <div class="spinner"></div>
+            </div>
+            <div class="cv-modal-footer">
+                <button type="button" class="submit-btn" id="cv-copy-btn">Copy to Clipboard</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const form = document.getElementById('job-search-form');
+    const statusEl = document.getElementById('jobs-status');
+    const resultsEl = document.getElementById('jobs-results');
+    const searchBtn = document.getElementById('search-btn');
+    const modal = document.getElementById('cv-modal');
+    const modalBody = document.getElementById('cv-modal-body');
+
+    let lastSkills = '';
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str == null ? '' : String(str);
+        return div.innerHTML;
+    }
+
+    function matchClass(pct) {
+        if (pct >= 70) return 'match-high';
+        if (pct >= 30) return 'match-mid';
+        return 'match-low';
+    }
+
+    function renderJobs(jobs, liveSearch) {
+        resultsEl.innerHTML = '';
+
+        if (!jobs.length) {
+            resultsEl.innerHTML = '<p class="jobs-empty">No matching jobs found. Try broadening your search.</p>';
+            return;
+        }
+
+        if (liveSearch === false) {
+            const note = document.createElement('p');
+            note.className = 'jobs-live-note';
+            note.textContent = 'Live search was unavailable, so these results are AI-generated based on typical postings for this role.';
+            resultsEl.appendChild(note);
+        }
+
+        jobs.forEach((job, idx) => {
+            const pct = Math.max(0, Math.min(100, parseInt(job.match_percentage, 10) || 0));
+            const card = document.createElement('div');
+            card.className = 'job-card';
+
+            const keywords = Array.isArray(job.keywords) ? job.keywords : [];
+
+            card.innerHTML = `
+                <div class="job-card-top">
+                    <div>
+                        <h3 class="job-title">${escapeHtml(job.title || 'Untitled role')}</h3>
+                        <p class="job-company">${escapeHtml(job.company || 'Unknown company')}${job.location ? ' &middot; ' + escapeHtml(job.location) : ''}</p>
+                    </div>
+                    <div class="match-badge ${matchClass(pct)}">${pct}%</div>
+                </div>
+                <p class="job-desc">${escapeHtml(job.description || '')}</p>
+                ${job.source_url ? `<a href="${escapeHtml(job.source_url)}" target="_blank" rel="noopener noreferrer" class="job-link">View posting &rarr;</a>` : ''}
+                ${pct < 30 ? `<button type="button" class="submit-btn generate-cv-btn" data-idx="${idx}">Generate CV for this role</button>` : ''}
+            `;
+
+            resultsEl.appendChild(card);
+
+            if (pct < 30) {
+                const btn = card.querySelector('.generate-cv-btn');
+                btn.addEventListener('click', () => generateCv(job));
+            }
+        });
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Searching for jobs...';
+        resultsEl.innerHTML = '';
+        searchBtn.disabled = true;
+        searchBtn.textContent = 'Searching...';
+
+        const payload = {
+            job_title: document.getElementById('job_title').value.trim(),
+            location: document.getElementById('location').value.trim(),
+            experience_level: document.getElementById('experience_level').value,
+            skills: document.getElementById('skills').value.trim(),
+        };
+        lastSkills = payload.skills;
+
+        try {
+            const res = await fetch("{{ url_for('jobs_search') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                statusEl.textContent = data.error || 'Something went wrong.';
+                return;
+            }
+            statusEl.style.display = 'none';
+            renderJobs(data.jobs || [], data.live_search);
+        } catch (err) {
+            statusEl.textContent = 'Network error while searching for jobs.';
+        } finally {
+            searchBtn.disabled = false;
+            searchBtn.textContent = 'Search Jobs';
+        }
+    });
+
+    async function generateCv(job) {
+        modal.style.display = 'flex';
+        modalBody.innerHTML = '<div class="spinner"></div><p class="cv-loading-text">Generating tailored CV...</p>';
+
+        try {
+            const res = await fetch("{{ url_for('jobs_generate_cv') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: job.title,
+                    company: job.company,
+                    job_description: job.job_description || job.description,
+                    keywords: job.keywords || [],
+                    skills: lastSkills,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                modalBody.innerHTML = `<p class="jobs-empty">${escapeHtml(data.error || 'Failed to generate CV.')}</p>`;
+                return;
+            }
+            modalBody.innerHTML = `<pre class="cv-text">${escapeHtml(data.cv)}</pre>`;
+        } catch (err) {
+            modalBody.innerHTML = '<p class="jobs-empty">Network error while generating CV.</p>';
+        }
+    }
+
+    document.getElementById('cv-modal-close').addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+    });
+    document.getElementById('cv-copy-btn').addEventListener('click', () => {
+        const cvText = modalBody.querySelector('.cv-text');
+        if (cvText) {
+            navigator.clipboard.writeText(cvText.textContent);
+        }
+    });
+    </script>
+</body>
+</html>
