@@ -18,6 +18,7 @@ from flask import (
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
+from pypdf import PdfReader
 from werkzeug.security import generate_password_hash, check_password_hash
 from xhtml2pdf import pisa
 
@@ -143,6 +144,13 @@ def _extract_json_array(text):
     match = re.search(r"\[.*\]", text, re.DOTALL)
     if not match:
         raise ValueError("Model response did not contain a JSON array.")
+    return json.loads(match.group(0))
+
+
+def _extract_json_object(text):
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        raise ValueError("Model response did not contain a JSON object.")
     return json.loads(match.group(0))
 
 
@@ -861,6 +869,178 @@ def cover_letter_delete(letter_id):
     _get_owned_doc('cover_letters', letter_id)
     db.collection('cover_letters').document(letter_id).delete()
     return jsonify({"ok": True})
+
+
+# --- PLAGIARISM CHECKER (PUBLIC, NO LOGIN REQUIRED) ---
+
+MAX_PLAGIARISM_TEXT_CHARS = 8000
+
+
+class PlagiarismMatch(BaseModel):
+    excerpt: str = ""
+    similarity_percentage: int = 0
+    source_description: str = ""
+    source_url: str = ""
+
+
+class PlagiarismReport(BaseModel):
+    originality_percentage: int = 100
+    plagiarism_percentage: int = 0
+    summary: str = ""
+    matches: list[PlagiarismMatch] = []
+
+
+def _extract_text_from_upload(file_storage):
+    filename = (file_storage.filename or '').lower()
+    raw = file_storage.read()
+
+    if filename.endswith('.txt'):
+        return raw.decode('utf-8', errors='ignore')
+
+    if filename.endswith('.docx'):
+        doc = Document(io.BytesIO(raw))
+        return '\n'.join(p.text for p in doc.paragraphs)
+
+    if filename.endswith('.pdf'):
+        reader = PdfReader(io.BytesIO(raw))
+        return '\n'.join((page.extract_text() or '') for page in reader.pages)
+
+    raise ValueError('Unsupported file type. Please upload a .txt, .docx, or .pdf file.')
+
+
+def _check_plagiarism_with_gemini(text, exclude_citations):
+    citation_instruction = (
+        "Ignore text that appears to be a direct quotation or citation (e.g. in "
+        "quotation marks, or clearly attributed to another source) when judging "
+        "originality - do not flag properly quoted/cited material as plagiarism."
+        if exclude_citations else
+        "Treat all text as the author's own claimed work, including quoted passages."
+    )
+
+    prompt = f"""You are a plagiarism detection assistant with access to Google Search.
+Analyze the following text for originality. Search the web to check whether
+passages closely match existing published content (articles, papers, websites).
+{citation_instruction}
+
+Break the text into meaningful excerpts/sentences and check each one for close
+matches elsewhere on the web. For every excerpt with a notable match, report the
+excerpt, an estimated similarity percentage (0-100), a short description of the
+matching source, and its URL if you found one.
+
+Then give:
+- "originality_percentage": overall estimated originality (0-100, where 100 is
+  fully original)
+- "plagiarism_percentage": 100 minus originality, roughly weighted by how much
+  of the text is covered by matches
+- "summary": a 2-3 sentence plain-English summary of the findings
+- "matches": array of the flagged excerpts as described above (empty array if
+  no notable matches found)
+
+Text to analyze:
+\"\"\"
+{text}
+\"\"\"
+
+Respond with ONLY a JSON object (no markdown, no commentary) with exactly these
+keys: "originality_percentage", "plagiarism_percentage", "summary", "matches"
+(each match an object with "excerpt", "similarity_percentage",
+"source_description", "source_url")."""
+
+    try:
+        response = genai_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                tools=[types.Tool(google_search=types.GoogleSearch())],
+            ),
+        )
+        return _extract_json_object(response.text), True
+    except Exception:
+        # Live grounded search unavailable (quota/billing) - fall back to a
+        # schema-validated non-grounded assessment so the feature still works.
+        fallback_prompt = prompt.replace(
+            "You are a plagiarism detection assistant with access to Google Search.",
+            "You are a plagiarism detection assistant. Live web search is "
+            "unavailable, so use your general knowledge to flag text that "
+            "resembles widely known published content instead of live results.",
+        )
+        response = genai_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=fallback_prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=PlagiarismReport,
+            ),
+        )
+        if response.parsed is not None:
+            return response.parsed.model_dump(), False
+        return json.loads(response.text), False
+
+
+@app.route('/plagiarism-checker')
+def plagiarism_checker():
+    return render_template('plagiarism_checker.html')
+
+
+@app.route('/plagiarism-checker/check', methods=['POST'])
+def plagiarism_checker_check():
+    if not genai_client:
+        return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 503
+
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        exclude_citations = request.form.get('exclude_citations') == 'true'
+        uploaded = request.files.get('file')
+        if uploaded and uploaded.filename:
+            try:
+                text = _extract_text_from_upload(uploaded)
+            except ValueError as e:
+                return jsonify({"error": str(e)}), 400
+        else:
+            text = request.form.get('text') or ''
+    else:
+        data = request.get_json(silent=True) or {}
+        text = data.get('text') or ''
+        exclude_citations = bool(data.get('exclude_citations'))
+
+    text = text.strip()
+    if not text:
+        return jsonify({"error": "Please paste some text or upload a document."}), 400
+    if len(text) < 50:
+        return jsonify({"error": "Please provide at least a few sentences to check."}), 400
+
+    truncated = len(text) > MAX_PLAGIARISM_TEXT_CHARS
+    text = text[:MAX_PLAGIARISM_TEXT_CHARS]
+
+    try:
+        report, live = _check_plagiarism_with_gemini(text, exclude_citations)
+    except Exception as e:
+        return jsonify({"error": f"Failed to check plagiarism: {e}"}), 502
+
+    return jsonify({"report": report, "live_search": live, "truncated": truncated, "text": text})
+
+
+@app.route('/plagiarism-checker/download/pdf', methods=['POST'])
+def plagiarism_checker_download_pdf():
+    data = request.get_json(silent=True) or {}
+    text = data.get('text') or ''
+    report = data.get('report') or {}
+
+    if not report:
+        return jsonify({"error": "No report to export."}), 400
+
+    html = render_template(
+        'plagiarism_report_pdf.html', report=report, text=text,
+        generated_on=datetime.now().strftime('%B %d, %Y'),
+    )
+    try:
+        pdf_bytes = _html_to_pdf_bytes(html)
+    except Exception as e:
+        return jsonify({"error": f"Failed to build PDF: {e}"}), 500
+
+    return send_file(
+        io.BytesIO(pdf_bytes), mimetype='application/pdf',
+        as_attachment=True, download_name='plagiarism-report.pdf',
+    )
 
 
 if __name__ == "__main__":
