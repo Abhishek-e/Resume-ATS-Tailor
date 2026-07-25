@@ -824,6 +824,7 @@ def profile_details_save():
         'github': (data.get('github') or '').strip(),
         'linkedin': (data.get('linkedin') or '').strip(),
         'other': (data.get('other') or '').strip(),
+        'about_me': (data.get('about_me') or '').strip(),
     }
     db.collection('users').document(session['user_id']).update({'details': details})
     return jsonify({"ok": True, "details": details})
