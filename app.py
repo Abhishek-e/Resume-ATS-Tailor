@@ -17,6 +17,7 @@ from flask import (
 )
 from google import genai
 from google.genai import types
+from openai import OpenAI
 from pydantic import BaseModel
 from pypdf import PdfReader
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -32,7 +33,31 @@ GEMINI_MODEL = "gemini-3.5-flash"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 genai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
+# Text generation (CV, cover letter, plagiarism write-up) runs on OpenRouter's
+# free tier instead of Gemini, so it isn't capped by Gemini's 20 req/day quota.
+# Get a key at https://openrouter.ai/keys - no billing required for :free models.
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
+openrouter_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=OPENROUTER_API_KEY,
+) if OPENROUTER_API_KEY else None
+
 RESUME_TEMPLATES = {"modern", "classic", "minimal"}
+
+
+def _openrouter_generate(prompt, json_mode=False):
+    """Runs a single-turn text generation on OpenRouter. Raises if the key
+    isn't configured or the API call fails - callers handle/report that."""
+    kwargs = {}
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+    completion = openrouter_client.chat.completions.create(
+        model=OPENROUTER_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        **kwargs,
+    )
+    return completion.choices[0].message.content
 
 
 def _init_firestore():
@@ -178,35 +203,35 @@ exactly these keys:
 - "source_url": link to the posting if known, else ""
 """
 
-    try:
-        response = genai_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-            ),
-        )
-        return _extract_json_array(response.text), True
-    except Exception:
-        # Live grounded search unavailable (quota/billing) - fall back to a
-        # non-grounded generation so the feature still works.
-        fallback_prompt = prompt.replace(
-            "You are a job search assistant with access to Google Search.",
-            "You are a job search assistant. Live web search is unavailable, so "
-            "generate realistic, plausible job postings typical for this role "
-            "instead of real-time results.",
-        )
-        response = genai_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=fallback_prompt,
-        )
-        return _extract_json_array(response.text), False
+    if genai_client:
+        try:
+            response = genai_client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                ),
+            )
+            return _extract_json_array(response.text), True
+        except Exception:
+            # Live grounded search unavailable (quota/billing) - fall through
+            # to a non-grounded generation on OpenRouter instead.
+            pass
+
+    fallback_prompt = prompt.replace(
+        "You are a job search assistant with access to Google Search.",
+        "You are a job search assistant. Live web search is unavailable, so "
+        "generate realistic, plausible job postings typical for this role "
+        "instead of real-time results.",
+    )
+    raw = _openrouter_generate(fallback_prompt)
+    return _extract_json_array(raw), False
 
 
 @app.route('/jobs/search', methods=['POST'])
 def jobs_search():
-    if not genai_client:
-        return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 503
+    if not genai_client and not openrouter_client:
+        return jsonify({"error": "Neither GEMINI_API_KEY nor OPENROUTER_API_KEY is configured on the server."}), 503
 
     data = request.get_json(silent=True) or {}
     job_title = (data.get('job_title') or '').strip()
@@ -227,8 +252,8 @@ def jobs_search():
 
 @app.route('/jobs/generate-cv', methods=['POST'])
 def jobs_generate_cv():
-    if not genai_client:
-        return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 503
+    if not openrouter_client:
+        return jsonify({"error": "OPENROUTER_API_KEY is not configured on the server."}), 503
 
     data = request.get_json(silent=True) or {}
     job_title = (data.get('title') or '').strip()
@@ -260,11 +285,7 @@ employers or degrees; use placeholders like [Your Previous Company] where
 actual history is unknown. Output plain text only, no markdown symbols."""
 
     try:
-        response = genai_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-        )
-        cv_text = response.text.strip()
+        cv_text = _openrouter_generate(prompt).strip()
     except Exception as e:
         return jsonify({"error": f"Failed to generate CV: {e}"}), 502
 
@@ -321,7 +342,11 @@ def _generate_resume_content(input_data):
 candidate's raw input below. Rewrite experience bullets to be concise,
 action-oriented, quantified where reasonable, and keyword-rich for the
 target role. Do not fabricate employers, dates, or degrees beyond what is
-given here - only improve the wording and structure of what's provided.
+given here - only improve the wording and structure of what's provided. If
+the raw input already contains bracketed placeholders (e.g.
+"[Your Previous Company]", "[Graduation Year]"), keep those placeholders in
+the output literally instead of dropping them - a section left as
+placeholders is more useful to the candidate than an empty section.
 
 Candidate input:
 Full Name: {input_data.get('full_name', '')}
@@ -339,19 +364,23 @@ Certifications (raw, optional): {input_data.get('certifications', '')}
 Projects (raw, optional): {input_data.get('projects', '')}
 
 Use empty strings/arrays for fields with no data. Do not invent employers,
-dates, or degrees beyond what is given."""
+dates, or degrees beyond what is given.
 
-    response = genai_client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=ResumeContent,
-        ),
-    )
-    if response.parsed is not None:
-        return response.parsed.model_dump()
-    return json.loads(response.text)
+Respond with ONLY a JSON object (no markdown, no commentary) with exactly
+these keys:
+- "full_name": string
+- "target_role": string
+- "contact": object with "email", "phone", "location", "linkedin", "portfolio" (strings)
+- "summary": string
+- "skills": array of strings
+- "experience": array of objects with "title", "company", "dates" (strings) and "bullets" (array of strings)
+- "education": array of objects with "degree", "school", "dates" (strings)
+- "certifications": array of strings
+- "projects": array of objects with "name", "description" (strings)"""
+
+    raw = _openrouter_generate(prompt, json_mode=True)
+    data = _extract_json_object(raw)
+    return ResumeContent(**data).model_dump()
 
 
 def _render_resume_html(template, resume):
@@ -465,8 +494,8 @@ def generate_cv():
 @app.route('/generate-cv/build', methods=['POST'])
 @login_required
 def generate_cv_build():
-    if not genai_client:
-        return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 503
+    if not openrouter_client:
+        return jsonify({"error": "OPENROUTER_API_KEY is not configured on the server."}), 503
 
     input_data = request.get_json(silent=True) or {}
     if not (input_data.get('full_name') and input_data.get('target_role')):
@@ -679,19 +708,21 @@ Use "Dear Hiring Manager," as the salutation if no hiring manager name is
 given, otherwise "Dear {{name}},". body_paragraphs is a list of 3-4
 plain-text paragraphs (no headers, no markdown). closing is a short
 sign-off phrase like "Sincerely," - do not repeat the candidate's name in
-it, that is rendered separately."""
+it, that is rendered separately.
 
-    response = genai_client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=CoverLetterContent,
-        ),
-    )
-    if response.parsed is not None:
-        return response.parsed.model_dump()
-    return json.loads(response.text)
+Respond with ONLY a JSON object (no markdown, no commentary) with exactly
+these keys:
+- "full_name": string
+- "target_role": string
+- "company_name": string
+- "contact": object with "email", "phone", "location", "linkedin", "portfolio" (strings)
+- "salutation": string
+- "body_paragraphs": array of strings
+- "closing": string"""
+
+    raw = _openrouter_generate(prompt, json_mode=True)
+    data = _extract_json_object(raw)
+    return CoverLetterContent(**data).model_dump()
 
 
 def _render_cover_letter_html(template, letter):
@@ -756,8 +787,8 @@ def generate_cover_letter():
 @app.route('/generate-cover-letter/build', methods=['POST'])
 @login_required
 def generate_cover_letter_build():
-    if not genai_client:
-        return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 503
+    if not openrouter_client:
+        return jsonify({"error": "OPENROUTER_API_KEY is not configured on the server."}), 503
 
     input_data = request.get_json(silent=True) or {}
     if not (input_data.get('full_name') and input_data.get('target_role') and input_data.get('company_name')):
@@ -946,35 +977,37 @@ keys: "originality_percentage", "plagiarism_percentage", "summary", "matches"
 (each match an object with "excerpt", "similarity_percentage",
 "source_description", "source_url")."""
 
-    try:
-        response = genai_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-            ),
-        )
-        return _extract_json_object(response.text), True
-    except Exception:
-        # Live grounded search unavailable (quota/billing) - fall back to a
-        # schema-validated non-grounded assessment so the feature still works.
-        fallback_prompt = prompt.replace(
-            "You are a plagiarism detection assistant with access to Google Search.",
-            "You are a plagiarism detection assistant. Live web search is "
-            "unavailable, so use your general knowledge to flag text that "
-            "resembles widely known published content instead of live results.",
-        )
-        response = genai_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=fallback_prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=PlagiarismReport,
-            ),
-        )
-        if response.parsed is not None:
-            return response.parsed.model_dump(), False
-        return json.loads(response.text), False
+    if genai_client:
+        try:
+            response = genai_client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                ),
+            )
+            return _extract_json_object(response.text), True
+        except Exception:
+            # Live grounded search unavailable (quota/billing) - fall through
+            # to a non-grounded assessment on OpenRouter instead.
+            pass
+
+    fallback_prompt = prompt.replace(
+        "You are a plagiarism detection assistant with access to Google Search.",
+        "You are a plagiarism detection assistant. Live web search is "
+        "unavailable, so use your general knowledge to flag text that "
+        "resembles widely known published content instead of live results.",
+    )
+    fallback_prompt += (
+        '\n\nRespond with ONLY a JSON object (no markdown, no commentary) with '
+        'exactly these keys: "originality_percentage" (int), '
+        '"plagiarism_percentage" (int), "summary" (string), "matches" (array of '
+        'objects with "excerpt", "similarity_percentage" (int), '
+        '"source_description", "source_url").'
+    )
+    raw = _openrouter_generate(fallback_prompt, json_mode=True)
+    data = _extract_json_object(raw)
+    return PlagiarismReport(**data).model_dump(), False
 
 
 @app.route('/plagiarism-checker')
@@ -984,8 +1017,8 @@ def plagiarism_checker():
 
 @app.route('/plagiarism-checker/check', methods=['POST'])
 def plagiarism_checker_check():
-    if not genai_client:
-        return jsonify({"error": "GEMINI_API_KEY is not configured on the server."}), 503
+    if not genai_client and not openrouter_client:
+        return jsonify({"error": "Neither GEMINI_API_KEY nor OPENROUTER_API_KEY is configured on the server."}), 503
 
     if request.content_type and 'multipart/form-data' in request.content_type:
         exclude_citations = request.form.get('exclude_citations') == 'true'
