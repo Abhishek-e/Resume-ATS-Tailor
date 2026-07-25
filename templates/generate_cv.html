@@ -28,6 +28,12 @@
     </section>
 
     <section class="cv-builder-section">
+        <div class="mode-switcher">
+            <button type="button" class="mode-btn active" data-mode="build">Build from Scratch</button>
+            <button type="button" class="mode-btn" data-mode="analyze">Analyze &amp; Tailor</button>
+        </div>
+
+        <div id="build-panel">
         <form id="cv-form" class="jobs-search-form">
             <div class="form-row">
                 <div class="form-group">
@@ -110,6 +116,98 @@
             <div id="save-status" class="jobs-status" style="display:none;"></div>
             <div class="cv-preview-frame-wrap">
                 <iframe id="preview-frame" class="cv-preview-frame" title="Resume preview"></iframe>
+            </div>
+        </div>
+        </div>
+
+        <div id="analyze-panel" style="display:none;">
+            <form id="analyze-form" class="jobs-search-form">
+                <div class="form-group">
+                    <label for="resume-text">Paste your resume</label>
+                    <textarea id="resume-text" name="resume_text" rows="10" placeholder="Paste your current resume text..."></textarea>
+                </div>
+
+                <div class="plag-upload-row">
+                    <label for="resume-file" class="plag-upload-label">
+                        <span id="resume-file-name">Or upload a .txt, .docx, or .pdf file</span>
+                    </label>
+                    <input type="file" id="resume-file" name="resume_file" accept=".txt,.docx,.pdf">
+                </div>
+
+                <div class="form-group">
+                    <label for="jd-text">Target Job Description *</label>
+                    <textarea id="jd-text" name="job_description" rows="8" placeholder="Paste the job description you're targeting..." required></textarea>
+                </div>
+
+                <button type="submit" class="submit-btn" id="analyze-btn">Analyze &amp; Tailor My Resume</button>
+            </form>
+
+            <div id="analyze-status" class="jobs-status" style="display:none;"></div>
+
+            <div id="analyze-results" class="analyze-results" style="display:none;">
+                <div class="score-compare-grid">
+                    <div class="score-card">
+                        <div class="plag-score-circle-wrap">
+                            <div class="plag-score-circle" id="before-score-circle">
+                                <div class="plag-score-circle-inner">
+                                    <span class="plag-score-number" id="before-score-number">0</span>
+                                    <span class="plag-score-label">Before</span>
+                                </div>
+                            </div>
+                        </div>
+                        <h3 class="score-card-title">Before Optimization</h3>
+                        <ul class="score-reasons" id="before-reasons-list"></ul>
+                    </div>
+                    <div class="score-card">
+                        <div class="plag-score-circle-wrap">
+                            <div class="plag-score-circle" id="after-score-circle">
+                                <div class="plag-score-circle-inner">
+                                    <span class="plag-score-number" id="after-score-number">0</span>
+                                    <span class="plag-score-label">After</span>
+                                </div>
+                            </div>
+                        </div>
+                        <h3 class="score-card-title">After Optimization</h3>
+                        <ul class="score-reasons" id="after-reasons-list"></ul>
+                    </div>
+                </div>
+
+                <div class="analyze-section-block">
+                    <h2 class="profile-section-title">Keywords Added</h2>
+                    <div class="keyword-chip-list" id="keywords-list"></div>
+                    <p class="jobs-empty" id="no-keywords" style="display:none;">No new keywords were needed.</p>
+                </div>
+
+                <div class="analyze-section-block">
+                    <h2 class="profile-section-title">Section-by-Section Changes</h2>
+                    <div class="change-accordion" id="changes-accordion"></div>
+                </div>
+
+                <div class="analyze-section-block">
+                    <h2 class="profile-section-title">Action Items For You</h2>
+                    <div class="jobs-live-note action-items-box" id="action-items-box" style="display:none;">
+                        <ul id="action-items-list"></ul>
+                    </div>
+                    <p class="jobs-empty" id="no-action-items" style="display:none;">No manual action items — you're good to go!</p>
+
+                    <div id="suggested-courses-block" style="display:none;">
+                        <h3 class="courses-subtitle">Suggested Courses</h3>
+                        <div class="course-chip-list" id="course-chip-list"></div>
+                    </div>
+                </div>
+
+                <div class="analyze-section-block">
+                    <h2 class="profile-section-title">Optimized Resume</h2>
+                    <div class="optimized-cv-card">
+                        <pre class="optimized-cv-text" id="optimized-cv-text"></pre>
+                    </div>
+                    <div class="optimized-cv-actions">
+                        <button type="button" class="resume-btn" id="copy-cv-btn">Copy to Clipboard</button>
+                        <button type="button" class="resume-btn" id="download-cv-btn">Download .md</button>
+                        <button type="button" class="submit-btn" id="analyze-save-btn" style="width:auto; padding:10px 22px;">Save to Profile</button>
+                    </div>
+                    <div id="analyze-save-status" class="jobs-status" style="display:none;"></div>
+                </div>
             </div>
         </div>
     </section>
@@ -281,6 +379,259 @@
         } finally {
             saveBtn.disabled = false;
             saveBtn.textContent = 'Save to Profile';
+        }
+    });
+
+    // --- Mode switcher (Build from Scratch / Analyze & Tailor) ---
+    const modeBtns = document.querySelectorAll('.mode-btn');
+    const buildPanel = document.getElementById('build-panel');
+    const analyzePanel = document.getElementById('analyze-panel');
+
+    function setMode(mode) {
+        modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+        buildPanel.style.display = mode === 'build' ? 'block' : 'none';
+        analyzePanel.style.display = mode === 'analyze' ? 'block' : 'none';
+    }
+
+    modeBtns.forEach(btn => {
+        btn.addEventListener('click', () => setMode(btn.dataset.mode));
+    });
+
+    const initialMode = new URLSearchParams(window.location.search).get('tab') === 'analyze' ? 'analyze' : 'build';
+    setMode(initialMode);
+
+    // --- Analyze & Tailor ---
+    const analyzeForm = document.getElementById('analyze-form');
+    const analyzeBtn = document.getElementById('analyze-btn');
+    const analyzeStatus = document.getElementById('analyze-status');
+    const analyzeResults = document.getElementById('analyze-results');
+    const resumeFile = document.getElementById('resume-file');
+    const resumeFileName = document.getElementById('resume-file-name');
+    const resumeText = document.getElementById('resume-text');
+    const jdText = document.getElementById('jd-text');
+    const copyCvBtn = document.getElementById('copy-cv-btn');
+    const downloadCvBtn = document.getElementById('download-cv-btn');
+    const analyzeSaveBtn = document.getElementById('analyze-save-btn');
+    const analyzeSaveStatus = document.getElementById('analyze-save-status');
+
+    let currentAnalysis = null;
+    let currentJobDescription = '';
+
+    resumeFile.addEventListener('change', () => {
+        if (resumeFile.files.length) {
+            resumeFileName.textContent = resumeFile.files[0].name;
+            resumeText.disabled = true;
+            resumeText.placeholder = 'Using uploaded file — clear the file to paste text instead.';
+        } else {
+            resumeFileName.textContent = 'Or upload a .txt, .docx, or .pdf file';
+            resumeText.disabled = false;
+            resumeText.placeholder = 'Paste your current resume text...';
+        }
+    });
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str == null ? '' : String(str);
+        return div.innerHTML;
+    }
+
+    function scoreColor(pct) {
+        if (pct >= 80) return '#4ade80';
+        if (pct >= 50) return '#f0b429';
+        return '#f87171';
+    }
+
+    function fillScoreCircle(circleId, numberId, score) {
+        const clamped = Math.max(0, Math.min(100, parseInt(score, 10) || 0));
+        const color = scoreColor(clamped);
+        document.getElementById(numberId).textContent = clamped + '%';
+        document.getElementById(circleId).style.background = `conic-gradient(${color} ${clamped * 3.6}deg, #222222 0deg)`;
+    }
+
+    function fillReasonsList(listId, reasons) {
+        const list = document.getElementById(listId);
+        list.innerHTML = '';
+        (reasons || []).forEach(r => {
+            const li = document.createElement('li');
+            li.textContent = r;
+            list.appendChild(li);
+        });
+    }
+
+    function renderAnalysis(analysis) {
+        fillScoreCircle('before-score-circle', 'before-score-number', analysis.before_score);
+        fillScoreCircle('after-score-circle', 'after-score-number', analysis.after_score);
+        fillReasonsList('before-reasons-list', analysis.before_reasons);
+        fillReasonsList('after-reasons-list', analysis.after_reasons);
+
+        const keywordsList = document.getElementById('keywords-list');
+        keywordsList.innerHTML = '';
+        const keywords = analysis.keywords_added || [];
+        document.getElementById('no-keywords').style.display = keywords.length ? 'none' : 'block';
+        keywords.forEach(k => {
+            const chip = document.createElement('span');
+            chip.className = 'keyword-chip';
+            chip.textContent = k;
+            keywordsList.appendChild(chip);
+        });
+
+        const courseChipList = document.getElementById('course-chip-list');
+        courseChipList.innerHTML = '';
+        const coursesBlock = document.getElementById('suggested-courses-block');
+        if (keywords.length) {
+            keywords.forEach(k => {
+                const chip = document.createElement('a');
+                chip.className = 'course-chip';
+                chip.href = "{{ url_for('courses') }}?keywords=" + encodeURIComponent(k);
+                chip.target = '_blank';
+                chip.rel = 'noopener noreferrer';
+                chip.textContent = '🎓 ' + k;
+                courseChipList.appendChild(chip);
+            });
+            coursesBlock.style.display = 'block';
+        } else {
+            coursesBlock.style.display = 'none';
+        }
+
+        const accordion = document.getElementById('changes-accordion');
+        accordion.innerHTML = '';
+        (analysis.section_changes || []).forEach((sc, i) => {
+            const item = document.createElement('div');
+            item.className = 'change-item';
+            item.innerHTML = `
+                <div class="change-item-header" data-index="${i}">
+                    <span class="change-item-section">${escapeHtml(sc.section || 'Section')}</span>
+                    <span class="details-chevron">⌄</span>
+                </div>
+                <div class="change-item-body">
+                    <p>${escapeHtml(sc.change || '')}</p>
+                </div>
+            `;
+            accordion.appendChild(item);
+        });
+        accordion.querySelectorAll('.change-item-header').forEach(header => {
+            header.addEventListener('click', () => {
+                header.closest('.change-item').classList.toggle('open');
+            });
+        });
+
+        const actionItems = analysis.action_items || [];
+        const actionBox = document.getElementById('action-items-box');
+        const actionList = document.getElementById('action-items-list');
+        actionList.innerHTML = '';
+        if (actionItems.length) {
+            actionItems.forEach(a => {
+                const li = document.createElement('li');
+                li.textContent = a;
+                actionList.appendChild(li);
+            });
+            actionBox.style.display = 'block';
+            document.getElementById('no-action-items').style.display = 'none';
+        } else {
+            actionBox.style.display = 'none';
+            document.getElementById('no-action-items').style.display = 'block';
+        }
+
+        document.getElementById('optimized-cv-text').textContent = analysis.optimized_resume_markdown || '';
+
+        analyzeResults.style.display = 'block';
+        analyzeResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    analyzeForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (analyzeBtn.disabled) return;
+
+        const jd = jdText.value.trim();
+        const hasFile = resumeFile.files.length > 0;
+        const hasText = resumeText.value.trim().length > 0;
+        if (!jd || (!hasFile && !hasText)) {
+            analyzeStatus.style.display = 'block';
+            analyzeStatus.textContent = 'Please provide your resume (paste or upload) and the target job description.';
+            return;
+        }
+
+        analyzeBtn.disabled = true;
+        analyzeBtn.textContent = 'Analyzing...';
+        analyzeStatus.style.display = 'block';
+        analyzeStatus.textContent = 'Analyzing your resume against the job description...';
+        analyzeResults.style.display = 'none';
+        analyzeSaveStatus.style.display = 'none';
+
+        try {
+            let res;
+            if (hasFile) {
+                const formData = new FormData();
+                formData.append('resume_file', resumeFile.files[0]);
+                formData.append('job_description', jd);
+                res = await fetch("{{ url_for('generate_cv_analyze') }}", { method: 'POST', body: formData });
+            } else {
+                res = await fetch("{{ url_for('generate_cv_analyze') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resume_text: resumeText.value, job_description: jd }),
+                });
+            }
+
+            const data = await res.json();
+            if (!res.ok) {
+                analyzeStatus.textContent = data.error || 'Something went wrong.';
+                return;
+            }
+
+            analyzeStatus.style.display = 'none';
+            currentAnalysis = data.analysis;
+            currentJobDescription = jd;
+            renderAnalysis(currentAnalysis);
+        } catch (err) {
+            analyzeStatus.textContent = 'Network error while analyzing your resume.';
+        } finally {
+            analyzeBtn.disabled = false;
+            analyzeBtn.textContent = 'Analyze & Tailor My Resume';
+        }
+    });
+
+    copyCvBtn.addEventListener('click', async () => {
+        if (!currentAnalysis) return;
+        try {
+            await navigator.clipboard.writeText(currentAnalysis.optimized_resume_markdown || '');
+            copyCvBtn.textContent = 'Copied!';
+        } catch (err) {
+            copyCvBtn.textContent = 'Copy failed';
+        } finally {
+            setTimeout(() => { copyCvBtn.textContent = 'Copy to Clipboard'; }, 1500);
+        }
+    });
+
+    downloadCvBtn.addEventListener('click', () => {
+        if (!currentAnalysis) return;
+        const blob = new Blob([currentAnalysis.optimized_resume_markdown || ''], { type: 'text/markdown' });
+        triggerDownload(blob, 'optimized-resume.md');
+    });
+
+    analyzeSaveBtn.addEventListener('click', async () => {
+        if (!currentAnalysis || analyzeSaveBtn.disabled) return;
+        analyzeSaveBtn.disabled = true;
+        analyzeSaveBtn.textContent = 'Saving...';
+        analyzeSaveStatus.style.display = 'block';
+        analyzeSaveStatus.textContent = 'Saving to your profile...';
+        try {
+            const res = await fetch("{{ url_for('generate_cv_analyze_save') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ job_description: currentJobDescription, analysis: currentAnalysis }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                analyzeSaveStatus.textContent = data.error || 'Failed to save.';
+                return;
+            }
+            analyzeSaveStatus.innerHTML = 'Saved! <a href="{{ url_for("profile") }}" style="color:#fff; text-decoration:underline;">View in your profile &rarr;</a>';
+        } catch (err) {
+            analyzeSaveStatus.textContent = 'Network error while saving.';
+        } finally {
+            analyzeSaveBtn.disabled = false;
+            analyzeSaveBtn.textContent = 'Save to Profile';
         }
     });
     </script>

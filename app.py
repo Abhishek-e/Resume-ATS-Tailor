@@ -4,6 +4,7 @@ import os
 import re
 from datetime import datetime, timezone
 from functools import wraps
+from urllib.parse import quote_plus
 
 import firebase_admin
 from docx import Document
@@ -91,7 +92,7 @@ def login_required(view):
     def wrapped(*args, **kwargs):
         if not session.get('user_id'):
             flash('Please log in to continue.', 'error')
-            return redirect(url_for('login', next=request.path))
+            return redirect(url_for('login', next=request.full_path))
         return view(*args, **kwargs)
     return wrapped
 
@@ -163,6 +164,45 @@ def logout():
 @app.route('/jobs')
 def jobs():
     return render_template('jobs.html')
+
+
+COURSE_PROVIDERS = [
+    {"name": "Coursera", "icon": "🎓", "url": "https://www.coursera.org/search?query={q}"},
+    {"name": "Udemy", "icon": "💻", "url": "https://www.udemy.com/courses/search/?q={q}"},
+    {"name": "edX", "icon": "📘", "url": "https://www.edx.org/search?q={q}"},
+    {"name": "YouTube", "icon": "▶️", "url": "https://www.youtube.com/results?search_query={q}"},
+]
+
+
+def _course_links_for_keyword(keyword):
+    links = []
+    for provider in COURSE_PROVIDERS:
+        query = f"{keyword} course" if provider["name"] == "YouTube" else keyword
+        links.append({
+            "name": provider["name"],
+            "icon": provider["icon"],
+            "url": provider["url"].format(q=quote_plus(query)),
+        })
+    return links
+
+
+@app.route('/courses')
+def courses():
+    raw = request.args.get('keywords', '')
+    seen = set()
+    keywords = []
+    for part in raw.split(','):
+        keyword = part.strip()
+        if keyword and keyword.lower() not in seen:
+            seen.add(keyword.lower())
+            keywords.append(keyword)
+    keywords = keywords[:20]
+
+    keyword_courses = [
+        {"keyword": keyword, "links": _course_links_for_keyword(keyword)}
+        for keyword in keywords
+    ]
+    return render_template('courses.html', keyword_courses=keyword_courses, raw_keywords=raw)
 
 
 def _extract_json_array(text):
@@ -332,6 +372,22 @@ class ResumeContent(BaseModel):
     projects: list[ResumeProject] = []
 
 
+class ResumeSectionChange(BaseModel):
+    section: str = ""
+    change: str = ""
+
+
+class ResumeAnalysis(BaseModel):
+    before_score: int = 0
+    before_reasons: list[str] = []
+    after_score: int = 0
+    after_reasons: list[str] = []
+    keywords_added: list[str] = []
+    section_changes: list[ResumeSectionChange] = []
+    action_items: list[str] = []
+    optimized_resume_markdown: str = ""
+
+
 def _slugify(text):
     slug = re.sub(r'[^a-zA-Z0-9]+', '-', text or '').strip('-').lower()
     return slug or 'resume'
@@ -381,6 +437,70 @@ these keys:
     raw = _openrouter_generate(prompt, json_mode=True)
     data = _extract_json_object(raw)
     return ResumeContent(**data).model_dump()
+
+
+MAX_ANALYZE_RESUME_CHARS = 12000
+MAX_ANALYZE_JD_CHARS = 6000
+
+
+def _analyze_and_tailor_resume(resume_text, job_description):
+    resume_text = resume_text[:MAX_ANALYZE_RESUME_CHARS]
+    job_description = job_description[:MAX_ANALYZE_JD_CHARS]
+
+    prompt = f"""You are an expert ATS (Applicant Tracking System) resume consultant.
+A candidate has given you their current resume and a target job description. Do all
+of the following:
+
+1. Score the ORIGINAL resume as-is against the job description for ATS compatibility
+   and keyword/skill match, as an integer 0-100 ("before_score"), and give 3-5 short,
+   specific reasons for that score ("before_reasons") - e.g. missing keywords, weak
+   quantification, poor formatting for parsing, irrelevant content.
+2. Rewrite the resume into an ATS-optimized version tailored to this job: reorganize
+   and rephrase for clarity and keyword density, surface relevant skills/experience
+   the candidate already has that map to the job description, and tighten bullet
+   points to be action-oriented and quantified where the original already implies a
+   metric. Do NOT fabricate employers, job titles, dates, degrees, or achievements
+   that aren't supported by the original resume - if a requirement in the job
+   description is genuinely unmet, leave a bracketed placeholder like
+   "[Add specific metric here]" instead of inventing one.
+3. Score the OPTIMIZED resume the same way as step 1, as "after_score" (integer
+   0-100) with "after_reasons" explaining the improvement.
+4. List the specific keywords/skills from the job description that were newly
+   incorporated into the optimized resume and were missing or weak in the original
+   ("keywords_added").
+5. Summarize what changed section-by-section ("section_changes") - at minimum cover
+   Summary, Experience, and Skills if the resume has them, plus any other section that
+   changed meaningfully. Each entry has a "section" name and a one-to-two sentence
+   "change" description of what was revised and why.
+6. List manual action items for the candidate - things you could not safely do for
+   them ("action_items"): missing certifications/requirements from the job
+   description, places that need real numbers/metrics only the candidate knows, gaps
+   that need clarification, etc. Empty array if none.
+
+Candidate's original resume:
+\"\"\"
+{resume_text}
+\"\"\"
+
+Target job description:
+\"\"\"
+{job_description}
+\"\"\"
+
+Respond with ONLY a JSON object (no markdown, no commentary) with exactly these keys:
+- "before_score": integer 0-100
+- "before_reasons": array of strings
+- "after_score": integer 0-100
+- "after_reasons": array of strings
+- "keywords_added": array of strings
+- "section_changes": array of objects with "section" and "change" (strings)
+- "action_items": array of strings
+- "optimized_resume_markdown": string - the full rewritten resume formatted as clean
+  Markdown (headings, bullet lists), ready to copy-paste"""
+
+    raw = _openrouter_generate(prompt, json_mode=True)
+    data = _extract_json_object(raw)
+    return ResumeAnalysis(**data).model_dump()
 
 
 def _render_resume_html(template, resume):
@@ -577,6 +697,73 @@ def generate_cv_save():
     return jsonify({"id": doc_ref.id})
 
 
+@app.route('/generate-cv/analyze', methods=['POST'])
+@login_required
+def generate_cv_analyze():
+    if not openrouter_client:
+        return jsonify({"error": "OPENROUTER_API_KEY is not configured on the server."}), 503
+
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        job_description = (request.form.get('job_description') or '').strip()
+        uploaded = request.files.get('resume_file')
+        if uploaded and uploaded.filename:
+            try:
+                resume_text = _extract_text_from_upload(uploaded)
+            except ValueError as e:
+                return jsonify({"error": str(e)}), 400
+        else:
+            resume_text = request.form.get('resume_text') or ''
+    else:
+        data = request.get_json(silent=True) or {}
+        resume_text = data.get('resume_text') or ''
+        job_description = (data.get('job_description') or '').strip()
+
+    resume_text = resume_text.strip()
+    if not resume_text or not job_description:
+        return jsonify({"error": "Please provide both your resume and the target job description."}), 400
+
+    try:
+        analysis = _analyze_and_tailor_resume(resume_text, job_description)
+    except Exception as e:
+        return jsonify({"error": f"Failed to analyze resume: {e}"}), 502
+
+    return jsonify({"analysis": analysis})
+
+
+@app.route('/generate-cv/analyze/save', methods=['POST'])
+@login_required
+def generate_cv_analyze_save():
+    if db is None:
+        return jsonify({"error": "Database is not configured on the server."}), 503
+
+    data = request.get_json(silent=True) or {}
+    job_description = data.get('job_description') or ''
+    analysis = data.get('analysis') or {}
+
+    if not analysis:
+        return jsonify({"error": "No analysis to save."}), 400
+
+    doc_ref = db.collection('resume_analyses').document()
+    doc_ref.set({
+        'user_id': session['user_id'],
+        'job_description': job_description,
+        'before_score': analysis.get('before_score', 0),
+        'after_score': analysis.get('after_score', 0),
+        'generated_content': analysis,
+        'created_at': firestore.SERVER_TIMESTAMP,
+    })
+
+    return jsonify({"id": doc_ref.id})
+
+
+@app.route('/analysis/<analysis_id>/delete', methods=['POST'])
+@login_required
+def analysis_delete(analysis_id):
+    _get_owned_doc('resume_analyses', analysis_id)
+    db.collection('resume_analyses').document(analysis_id).delete()
+    return jsonify({"ok": True})
+
+
 def _fetch_user_docs(collection):
     if db is None:
         return []
@@ -606,13 +793,19 @@ def _get_owned_doc(collection, doc_id):
 def profile():
     resumes = _fetch_user_docs('resumes')
     cover_letters = _fetch_user_docs('cover_letters')
+    analyses = _fetch_user_docs('resume_analyses')
+    analyses_markdown_map = {
+        a['id']: (a.get('generated_content') or {}).get('optimized_resume_markdown', '')
+        for a in analyses
+    }
     profile_details = {}
     if db is not None:
         user_doc = db.collection('users').document(session['user_id']).get()
         if user_doc.exists:
             profile_details = user_doc.to_dict().get('details') or {}
     return render_template(
-        'profile.html', resumes=resumes, cover_letters=cover_letters, profile_details=profile_details,
+        'profile.html', resumes=resumes, cover_letters=cover_letters, analyses=analyses,
+        analyses_markdown_map=analyses_markdown_map, profile_details=profile_details,
     )
 
 

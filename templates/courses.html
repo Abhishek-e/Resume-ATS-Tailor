@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suggested Courses - Resumify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
+        </div>
+        <div class="nav-center">
+            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
+        </div>
+        <div class="nav-right">
+            {% if session.user_id %}
+                <a href="{{ url_for('profile') }}" style="color: #ffffff; font-size: 14px; margin-right: 10px; text-decoration: none;">{{ session.username }}</a>
+                <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="nav-btn-login">Log In</a>
+                <a href="{{ url_for('register') }}" class="nav-btn-primary">Get Started</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <section class="jobs-hero">
+        <h1>Suggested Courses</h1>
+        <p class="subtitle">Close the gaps your ATS analysis found — pick a keyword below to find courses that teach it.</p>
+    </section>
+
+    <section class="cv-builder-section">
+        <form id="courses-search-form" class="jobs-search-form" style="margin-bottom: 40px;">
+            <div class="form-group">
+                <label for="courses-search-input">Search for a skill or keyword</label>
+                <input type="text" id="courses-search-input" placeholder="e.g. Kubernetes, Data Analysis, SEO" value="{{ raw_keywords }}">
+            </div>
+            <button type="submit" class="submit-btn">Find Courses</button>
+        </form>
+
+        {% if keyword_courses %}
+            {% for group in keyword_courses %}
+            <div class="course-keyword-group">
+                <h2 class="course-keyword-title">{{ group.keyword }}</h2>
+                <div class="course-bubble-grid">
+                    {% for link in group.links %}
+                    <a class="course-provider-bubble" href="{{ link.url }}" target="_blank" rel="noopener noreferrer">
+                        <span class="course-provider-icon">{{ link.icon }}</span>
+                        <span class="course-provider-name">{{ link.name }}</span>
+                        <span class="course-provider-sub">Search courses</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="jobs-empty">No keywords yet — run the <a href="{{ url_for('generate_cv', tab='analyze') }}" style="color:#ffffff; text-decoration:underline;">Analyze &amp; Tailor CV</a> tool or search for a skill above to see suggested courses.</p>
+        {% endif %}
+    </section>
+
+    <script>
+        document.getElementById('courses-search-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const value = document.getElementById('courses-search-input').value.trim();
+            const url = new URL(window.location.origin + "{{ url_for('courses') }}");
+            if (value) url.searchParams.set('keywords', value);
+            window.location.href = url.toString();
+        });
+    </script>
+</body>
+</html>

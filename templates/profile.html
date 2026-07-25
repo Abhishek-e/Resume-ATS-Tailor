@@ -168,6 +168,51 @@
         {% endif %}
     </section>
 
+    <section class="profile-section">
+        <h2 class="profile-section-title">Saved Resume Analyses</h2>
+
+        {% if analyses %}
+        <div class="resume-list">
+            {% for a in analyses %}
+            <div class="resume-row">
+                <div class="resume-info">
+                    <div class="resume-name">{{ (a.job_description or 'Resume Analysis')[:60] }}{% if a.job_description and a.job_description|length > 60 %}&hellip;{% endif %}</div>
+                    <div class="resume-meta">
+                        <span class="match-badge {% if a.before_score >= 80 %}match-high{% elif a.before_score >= 50 %}match-mid{% else %}match-low{% endif %}" style="padding:2px 10px; font-size:12px;">Before {{ a.before_score }}%</span>
+                        <span class="match-badge {% if a.after_score >= 80 %}match-high{% elif a.after_score >= 50 %}match-mid{% else %}match-low{% endif %}" style="padding:2px 10px; font-size:12px; margin-left:6px;">After {{ a.after_score }}%</span>
+                        &middot; {{ a.created_at.strftime('%d %b %Y') }}
+                    </div>
+                </div>
+                <div class="resume-actions">
+                    <button type="button" class="resume-btn copy-analysis-btn" data-id="{{ a.id }}">Copy Optimized CV</button>
+                    <button type="button" class="delete-icon-btn" data-type="analysis" data-id="{{ a.id }}" title="Delete">&times;</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="jobs-empty">No resume analyses saved yet. <a href="{{ url_for('generate_cv', tab='analyze') }}">Analyze &amp; tailor your resume</a>.</p>
+        {% endif %}
+    </section>
+
+    <script>
+    const analysisMarkdownMap = {{ analyses_markdown_map|tojson }};
+
+    document.querySelectorAll('.copy-analysis-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const md = analysisMarkdownMap[btn.dataset.id] || '';
+            try {
+                await navigator.clipboard.writeText(md);
+                const original = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = original; }, 1500);
+            } catch (err) {
+                alert('Failed to copy to clipboard.');
+            }
+        });
+    });
+    </script>
+
     <script>
     const detailsToggle = document.getElementById('details-toggle');
     const detailsBody = document.getElementById('details-body');
@@ -251,11 +296,13 @@
             if (btn.disabled) return;
             const type = btn.dataset.type;
             const id = btn.dataset.id;
-            const label = type === 'resume' ? 'resume' : 'cover letter';
+            const labels = { resume: 'resume', 'cover-letter': 'cover letter', analysis: 'resume analysis' };
+            const urls = { resume: `/resume/${id}/delete`, 'cover-letter': `/cover-letter/${id}/delete`, analysis: `/analysis/${id}/delete` };
+            const label = labels[type] || 'item';
             if (!confirm(`Delete this saved ${label}? This can't be undone.`)) return;
 
             btn.disabled = true;
-            const url = type === 'resume' ? `/resume/${id}/delete` : `/cover-letter/${id}/delete`;
+            const url = urls[type];
             try {
                 const res = await fetch(url, { method: 'POST' });
                 if (res.ok) {
