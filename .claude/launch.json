@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "flask-app",
+      "runtimeExecutable": "venv/bin/python",
+      "runtimeArgs": ["app.py"],
+      "port": 5000
+    },
+    {
+      "name": "volt-dashboard",
+      "runtimeExecutable": "flask-dashboard-volt/env/bin/python",
+      "runtimeArgs": [
+        "/private/tmp/claude-501/-Users-abhishekmondal-Documents-Project-1/154bc9e7-bcee-48d3-8ce9-38cb71fa9187/scratchpad/run_volt.py"
+      ],
+      "port": 5005
+    }
+  ]
+}

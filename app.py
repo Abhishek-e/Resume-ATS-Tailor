@@ -24,6 +24,10 @@ from pypdf import PdfReader
 from werkzeug.security import generate_password_hash, check_password_hash
 from xhtml2pdf import pisa
 
+import applykit
+import jobsources
+import jobstore
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -91,6 +95,14 @@ def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not session.get('user_id'):
+            # The apply endpoints are called with fetch(), so send them a JSON
+            # 401 with somewhere to go - an HTML redirect would arrive as a
+            # login page parsed as an API response.
+            if request.is_json or request.path.startswith('/jobs/apply'):
+                return jsonify({
+                    "error": "Please log in to apply.",
+                    "login_url": url_for('login', next=url_for('jobs')),
+                }), 401
             flash('Please log in to continue.', 'error')
             return redirect(url_for('login', next=request.full_path))
         return view(*args, **kwargs)
@@ -101,7 +113,31 @@ def login_required(view):
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    user_id = session.get('user_id')
+    all_jobs = jobstore.all_jobs()
+
+    # Never block the landing page on a cold fetch (~8s across four boards) -
+    # warm it in the background and let the section fill in on the next load.
+    if not all_jobs:
+        jobstore.warm_async(_fetch_live_jobs)
+        return render_template(
+            'index.html', preview_jobs=[], total_jobs=0,
+            jobs_warming=jobstore.is_warming(),
+        )
+
+    profile = _user_job_profile(_load_profile_details())
+    personalised = bool(user_id and profile['skills'])
+    if personalised:
+        jobsources.score_jobs(all_jobs, profile)
+    applied_ids = jobstore.applied_job_ids(db, user_id) if user_id else set()
+
+    return render_template(
+        'index.html',
+        preview_jobs=jobstore.preview_jobs(all_jobs, applied_ids, personalised),
+        total_jobs=len(all_jobs),
+        jobs_warming=False,
+        personalised=personalised,
+    )
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -161,9 +197,201 @@ def logout():
     return redirect(url_for('home'))
 
 
+def _user_job_profile(details):
+    """Turns the saved profile details into the shape the matcher and the
+    apply prefill both expect."""
+    skills = [s.strip() for s in re.split(r"[,\n;]+", details.get('skills') or '') if s.strip()]
+    titles = [t.strip() for t in re.split(r"[,\n;]+", details.get('desired_titles') or '') if t.strip()]
+    locations = [details.get('location') or '', 'remote']
+    return {
+        'full_name': details.get('full_name') or session.get('username', ''),
+        'email': session.get('user_id', ''),
+        'phone': details.get('phone') or '',
+        'location': details.get('location') or '',
+        'linkedin': details.get('linkedin') or '',
+        'github': details.get('github') or '',
+        'portfolio': details.get('other') or '',
+        'skills': skills,
+        'desired_titles': titles,
+        'desired_locations': [loc for loc in locations if loc],
+    }
+
+
+def _load_profile_details():
+    if db is None or not session.get('user_id'):
+        return {}
+    doc = db.collection('users').document(session['user_id']).get()
+    return (doc.to_dict().get('details') or {}) if doc.exists else {}
+
+
+def _fetch_live_jobs():
+    return jobsources.fetch_all(jobsources.load_config())
+
+
 @app.route('/jobs')
 def jobs():
-    return render_template('jobs.html')
+    """Public: anyone can browse and filter listings. Applying needs an account,
+    which the template asks for at the point of use."""
+    user_id = session.get('user_id')
+    profile = _user_job_profile(_load_profile_details())
+
+    all_jobs = jobstore.all_jobs()
+    state = jobstore.cache_state()
+
+    # First visit after a restart has an empty cache - pull one set so the page
+    # is never blank, rather than making the user guess they must click Fetch.
+    if not all_jobs:
+        try:
+            fetched, errors = _fetch_live_jobs()
+            jobstore.store_jobs(fetched, errors)
+            all_jobs = jobstore.all_jobs()
+            state = jobstore.cache_state()
+        except Exception as exc:  # noqa: BLE001
+            state['errors'] = [str(exc)]
+
+    jobsources.score_jobs(all_jobs, profile)
+    applied_ids = jobstore.applied_job_ids(db, user_id) if user_id else set()
+
+    results = jobstore.filter_jobs(
+        all_jobs,
+        search=request.args.get('q', ''),
+        source=request.args.get('source', ''),
+        category=request.args.get('category', ''),
+        applied_ids=applied_ids,
+        hide_applied=request.args.get('hide_applied') == '1',
+    )
+
+    # No runtime capability check any more - the apply kit is pure Python, so
+    # it works on every host rather than only where a browser is installed.
+    return render_template(
+        'jobs.html',
+        jobs=results,
+        total_cached=state['count'],
+        fetched_at=state['fetched_at'],
+        is_stale=state['is_stale'],
+        fetch_errors=state['errors'],
+        sources=jobstore.distinct(all_jobs, 'source'),
+        categories=jobstore.distinct(all_jobs, 'category'),
+        search=request.args.get('q', ''),
+        selected_source=request.args.get('source', ''),
+        selected_category=request.args.get('category', ''),
+        hide_applied=request.args.get('hide_applied') == '1',
+        applied_count=len(applied_ids),
+        has_skills=bool(profile['skills']),
+        direct_apply_ats=sorted(applykit.SUPPORTED_ATS),
+        # Offered as the CV to attach when applying; most recent is the default.
+        saved_resumes=_fetch_user_docs('resumes') if user_id else [],
+        signed_in=bool(user_id),
+    )
+
+
+@app.route('/jobs/fetch', methods=['POST'])
+def jobs_fetch():
+    try:
+        fetched, errors = _fetch_live_jobs()
+    except Exception as exc:  # noqa: BLE001
+        flash(f'Could not refresh listings: {exc}', 'error')
+        return redirect(url_for('jobs'))
+
+    jobstore.store_jobs(fetched, errors)
+    if errors:
+        flash(f"Fetched {len(fetched)} jobs, but some boards failed: {'; '.join(errors)}", 'error')
+    else:
+        flash(f'Fetched {len(fetched)} live job postings.', 'success')
+    return redirect(url_for('jobs', **{k: v for k, v in request.args.items()}))
+
+
+def _resume_pdf_for_apply(resume_id):
+    """Renders one of the user's saved resumes to PDF bytes so the apply
+    service can upload it. Falls back to their most recent resume when the
+    caller didn't pick one, so applications aren't sent without a CV attached.
+    Returns (bytes, filename) or (None, '')."""
+    if db is None:
+        return None, ''
+
+    row = None
+    if resume_id:
+        doc = db.collection('resumes').document(resume_id).get()
+        if doc.exists and doc.to_dict().get('user_id') == session['user_id']:
+            row = doc.to_dict()
+    if row is None:
+        saved = _fetch_user_docs('resumes')
+        if not saved:
+            return None, ''
+        row = saved[0]
+    try:
+        html = _render_resume_html(row.get('template', 'modern'), row.get('generated_content') or {})
+        return _html_to_pdf_bytes(html), f"{_slugify(row.get('full_name') or 'resume')}.pdf"
+    except Exception:  # noqa: BLE001 - apply can still proceed without a CV attached
+        return None, ''
+
+
+@app.route('/jobs/<job_id>/apply-kit')
+@login_required
+def jobs_apply_kit(job_id):
+    """Everything needed to finish one application: the (pre-filled where the
+    board supports it) form URL, the values to enter, and whether a tailored CV
+    is available to download."""
+    job = jobstore.get_job(job_id)
+    if job is None:
+        return jsonify({"error": "That posting is no longer in the current listing set. Refresh and try again."}), 404
+
+    profile = _user_job_profile(_load_profile_details())
+    if not profile['full_name']:
+        return jsonify({"error": "Add your name to your profile before applying."}), 400
+
+    resume_bytes, _ = _resume_pdf_for_apply(request.args.get('resume_id'))
+    kit = applykit.build_kit(job, profile, has_resume=bool(resume_bytes))
+    kit['resume_url'] = url_for('jobs_apply_cv', job_id=job_id,
+                                resume_id=request.args.get('resume_id', ''))
+    return jsonify(kit)
+
+
+@app.route('/jobs/<job_id>/apply-cv.pdf')
+@login_required
+def jobs_apply_cv(job_id):
+    """The tailored CV to attach, rendered on demand from a saved resume."""
+    job = jobstore.get_job(job_id)
+    resume_bytes, filename = _resume_pdf_for_apply(request.args.get('resume_id'))
+    if not resume_bytes:
+        abort(404)
+    company = _slugify((job or {}).get('company') or 'application')
+    return send_file(
+        io.BytesIO(resume_bytes), mimetype='application/pdf',
+        as_attachment=True, download_name=f"{_slugify(filename.rsplit('.', 1)[0])}-{company}.pdf",
+    )
+
+
+
+@app.route('/jobs/mark-applied', methods=['POST'])
+@login_required
+def jobs_mark_applied():
+    """Records an application. 'submitted' comes from the apply kit, where the
+    user confirmed they sent it after we prepared it; 'manual' is someone
+    ticking off a job they found and applied to on their own."""
+    data = request.get_json(silent=True) or {}
+    job = jobstore.get_job((data.get('job_id') or '').strip())
+    if job is None:
+        return jsonify({"error": "Unknown posting."}), 404
+
+    status = 'submitted' if data.get('status') == 'submitted' else 'manual'
+    try:
+        saved = jobstore.record_application(
+            db, session['user_id'], job, status=status,
+            match_percentage=job.get('match_percentage', 0),
+        )
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 503
+    return jsonify({"ok": True, "application": {"id": saved["id"], "status": saved["status"]}})
+
+
+@app.route('/applications/<application_id>/delete', methods=['POST'])
+@login_required
+def application_delete(application_id):
+    if not jobstore.delete_application(db, session['user_id'], application_id):
+        abort(404)
+    flash('Application removed from your tracker.', 'success')
+    return redirect(url_for('profile'))
 
 
 COURSE_PROVIDERS = [
@@ -219,75 +447,6 @@ def _extract_json_object(text):
     return json.loads(match.group(0))
 
 
-def _search_jobs_with_gemini(job_title, location, experience_level, skills):
-    prompt = f"""You are a job search assistant with access to Google Search.
-Search the web for real, currently posted job openings matching:
-- Role: {job_title}
-- Location: {location or "Any"}
-- Experience level: {experience_level or "Any"}
-- Candidate's skills / experience: {skills or "Not provided"}
-
-Find up to 6 relevant job postings. For each one, estimate the candidate's
-chance of getting the job as a percentage (0-100), based on how well the
-candidate's skills/experience match the role's likely requirements.
-
-Respond with ONLY a JSON array (no markdown, no commentary) of objects with
-exactly these keys:
-- "title": job title
-- "company": company name
-- "location": job location
-- "match_percentage": integer 0-100
-- "description": a concise 2-line summary of the role
-- "job_description": a fuller job description / requirements (4-8 sentences)
-- "keywords": array of 5-10 important keywords/skills from the JD
-- "source_url": link to the posting if known, else ""
-"""
-
-    if genai_client:
-        try:
-            response = genai_client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    tools=[types.Tool(google_search=types.GoogleSearch())],
-                ),
-            )
-            return _extract_json_array(response.text), True
-        except Exception:
-            # Live grounded search unavailable (quota/billing) - fall through
-            # to a non-grounded generation on OpenRouter instead.
-            pass
-
-    fallback_prompt = prompt.replace(
-        "You are a job search assistant with access to Google Search.",
-        "You are a job search assistant. Live web search is unavailable, so "
-        "generate realistic, plausible job postings typical for this role "
-        "instead of real-time results.",
-    )
-    raw = _openrouter_generate(fallback_prompt)
-    return _extract_json_array(raw), False
-
-
-@app.route('/jobs/search', methods=['POST'])
-def jobs_search():
-    if not genai_client and not openrouter_client:
-        return jsonify({"error": "Neither GEMINI_API_KEY nor OPENROUTER_API_KEY is configured on the server."}), 503
-
-    data = request.get_json(silent=True) or {}
-    job_title = (data.get('job_title') or '').strip()
-    location = (data.get('location') or '').strip()
-    experience_level = (data.get('experience_level') or '').strip()
-    skills = (data.get('skills') or '').strip()
-
-    if not job_title:
-        return jsonify({"error": "Job title is required."}), 400
-
-    try:
-        jobs_data, live = _search_jobs_with_gemini(job_title, location, experience_level, skills)
-    except Exception as e:
-        return jsonify({"error": f"Failed to fetch job listings: {e}"}), 502
-
-    return jsonify({"jobs": jobs_data, "live_search": live})
 
 
 @app.route('/jobs/generate-cv', methods=['POST'])
@@ -798,14 +957,12 @@ def profile():
         a['id']: (a.get('generated_content') or {}).get('optimized_resume_markdown', '')
         for a in analyses
     }
-    profile_details = {}
-    if db is not None:
-        user_doc = db.collection('users').document(session['user_id']).get()
-        if user_doc.exists:
-            profile_details = user_doc.to_dict().get('details') or {}
+    profile_details = _load_profile_details()
+    applications = jobstore.list_applications(db, session['user_id'])
     return render_template(
         'profile.html', resumes=resumes, cover_letters=cover_letters, analyses=analyses,
         analyses_markdown_map=analyses_markdown_map, profile_details=profile_details,
+        applications=applications, analytics=jobstore.build_analytics(applications),
     )
 
 
@@ -825,6 +982,11 @@ def profile_details_save():
         'linkedin': (data.get('linkedin') or '').strip(),
         'other': (data.get('other') or '').strip(),
         'about_me': (data.get('about_me') or '').strip(),
+        # Used by Find Jobs: phone pre-fills applications, skills and desired
+        # titles drive the match percentage.
+        'phone': (data.get('phone') or '').strip(),
+        'skills': (data.get('skills') or '').strip(),
+        'desired_titles': (data.get('desired_titles') or '').strip(),
     }
     db.collection('users').document(session['user_id']).update({'details': details})
     return jsonify({"ok": True, "details": details})

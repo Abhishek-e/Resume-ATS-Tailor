@@ -68,4 +68,85 @@
             </a>
         </div>
     </section>
+
+    <!-- Live jobs: browsable without an account; applying prompts for login -->
+    <section class="home-jobs">
+        <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+            <div>
+                <h2 class="home-jobs-title">Live job openings</h2>
+                <p class="home-jobs-sub mb-0">
+                    {% if total_jobs %}
+                        {{ total_jobs }} openings from Greenhouse, Lever, RemoteOK and We Work Remotely
+                        {%- if personalised %} — ranked against your profile{% endif %}.
+                        No account needed to browse.
+                    {% elif jobs_warming %}
+                        Loading the latest openings from Greenhouse, Lever, RemoteOK and We Work Remotely…
+                    {% else %}
+                        Openings from Greenhouse, Lever, RemoteOK and We Work Remotely.
+                    {% endif %}
+                </p>
+            </div>
+            <a href="{{ url_for('jobs') }}" class="btn btn-primary">
+                {% if total_jobs %}Browse all {{ total_jobs }} jobs{% else %}Browse jobs{% endif %}
+            </a>
+        </div>
+
+        {% if preview_jobs %}
+            <div class="row row-cards">
+                {% for job in preview_jobs %}
+                    <div class="col-12 col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex align-items-start gap-2">
+                                    <div class="flex-fill" style="min-width: 0;">
+                                        <h3 class="card-title mb-1">{{ job.title }}</h3>
+                                        <div class="text-secondary">
+                                            <strong>{{ job.company }}</strong>
+                                            {% if job.location %} &middot; {{ job.location }}{% endif %}
+                                        </div>
+                                    </div>
+                                    {% if personalised %}
+                                        <div class="match-badge {% if job.match_percentage >= 70 %}match-high{% elif job.match_percentage >= 30 %}match-mid{% else %}match-low{% endif %}">
+                                            {{ job.match_percentage }}%
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="mt-2">
+                                    <span class="badge bg-secondary-lt">{{ job.source }}</span>
+                                    <span class="badge bg-secondary-lt">{{ job.category }}</span>
+                                    {% if job.ats_type == 'lever' %}
+                                        <span class="badge bg-primary-lt">direct apply link</span>
+                                    {% endif %}
+                                </div>
+
+                                <div class="btn-list mt-3 pt-1 mt-auto">
+                                    {% if session.user_id %}
+                                        {# Assisted apply needs the confirm modal and CV picker that live
+                                           on Find Jobs, so hand off there and open this job's flow on
+                                           arrival rather than half-building it here. #}
+                                        <a href="{{ url_for('jobs', q=job.company, apply=job.id) }}"
+                                           class="btn btn-primary">Apply</a>
+                                    {% else %}
+                                        <a href="{{ url_for('login', next=url_for('jobs')) }}" class="btn btn-primary">
+                                            Log in to apply
+                                        </a>
+                                    {% endif %}
+                                    <a href="{{ job.url }}" target="_blank" rel="noopener noreferrer"
+                                       class="btn btn-ghost-secondary">Open listing</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% elif jobs_warming %}
+            <div class="card">
+                <div class="card-body text-center py-4">
+                    <div class="spinner"></div>
+                    <p class="text-secondary mt-2 mb-0">Fetching live openings — refresh in a moment.</p>
+                </div>
+            </div>
+        {% endif %}
+    </section>
 {% endblock %}

@@ -2,79 +2,270 @@
 {% set active_page = "jobs" %}
 {% block title %}Find Jobs - Resumify{% endblock %}
 
-{% block content %}
-    <!-- Jobs Hero -->
-    <section class="jobs-hero">
-        <h1>Find your next role</h1>
-        <p class="subtitle">Search live job postings powered by AI, see your estimated chance of getting the job, and generate a tailored CV when you need an edge.</p>
-    </section>
-
-    <!-- Search Form -->
-    <section class="jobs-search-section">
-        <form id="job-search-form" class="jobs-search-form">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="job_title">Job Title / Role *</label>
-                    <input type="text" id="job_title" name="job_title" placeholder="e.g. Frontend Developer" required class="form-control">
-                </div>
-                <div class="form-group">
-                    <label for="location">Location</label>
-                    <input type="text" id="location" name="location" placeholder="e.g. Remote, Bangalore" class="form-control">
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <h2 class="page-title">Find Jobs</h2>
+                <div class="text-secondary mt-1">
+                    {{ total_cached }} live postings from Greenhouse, Lever, RemoteOK and We Work Remotely{%
+                        if signed_in %}, ranked against your profile{% endif %}.
+                    {% if fetched_at %}
+                        <span class="d-none d-md-inline">&middot; Updated {{ fetched_at.strftime('%d %b, %H:%M UTC') }}</span>
+                    {% endif %}
                 </div>
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="experience_level">Experience Level</label>
-                    <select id="experience_level" name="experience_level" class="form-select">
-                        <option value="">Any</option>
-                        <option value="Entry-level">Entry-level</option>
-                        <option value="Mid-level">Mid-level</option>
-                        <option value="Senior">Senior</option>
-                        <option value="Lead / Manager">Lead / Manager</option>
-                    </select>
+            <div class="col-12 col-md-auto ms-md-auto mt-2 mt-md-0">
+                <div class="btn-list">
+                    {% if signed_in %}
+                        <a href="{{ url_for('profile') }}#applications" class="btn btn-ghost-secondary">
+                            {{ applied_count }} applied
+                        </a>
+                    {% else %}
+                        <a href="{{ url_for('login', next=url_for('jobs')) }}" class="btn btn-ghost-secondary">Log in</a>
+                    {% endif %}
+                    <form method="POST" action="{{ url_for('jobs_fetch') }}" class="d-inline">
+                        <button type="submit" class="btn btn-primary" id="fetch-btn">
+                            Refresh listings
+                        </button>
+                    </form>
                 </div>
-            </div>
-            <div class="form-group">
-                <label for="skills">Your Skills / Experience</label>
-                <textarea id="skills" name="skills" rows="3" placeholder="e.g. 3 years React, Node.js, REST APIs, SQL... (used to estimate your match %)" class="form-control"></textarea>
-            </div>
-            <button type="submit" class="submit-btn" id="search-btn">Search Jobs</button>
-        </form>
-
-        <div id="jobs-status" class="jobs-status" style="display:none;"></div>
-
-        <div id="jobs-results" class="jobs-results"></div>
-    </section>
-
-    <!-- CV Modal -->
-    <div id="cv-modal" class="cv-modal-overlay" style="display:none;">
-        <div class="cv-modal">
-            <div class="cv-modal-header">
-                <h3>Tailored CV</h3>
-                <button type="button" class="cv-modal-close" id="cv-modal-close">&times;</button>
-            </div>
-            <div class="cv-modal-body" id="cv-modal-body">
-                <div class="spinner"></div>
-            </div>
-            <div class="cv-modal-footer">
-                <button type="button" class="submit-btn" id="cv-copy-btn">Copy to Clipboard</button>
             </div>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    
+{% block content %}
+    {% if fetch_errors %}
+        <div class="alert alert-warning" role="alert">
+            <div class="fw-bold">Some boards didn't respond</div>
+            <div class="text-secondary small">{{ fetch_errors|join('; ') }}</div>
+        </div>
+    {% endif %}
+
+    {% if not signed_in %}
+        <div class="alert alert-info" role="alert">
+            <div>You're browsing as a guest.
+                <a href="{{ url_for('login', next=url_for('jobs')) }}">Log in</a> or
+                <a href="{{ url_for('register') }}">create an account</a> to see your match score for each
+                role and to apply without leaving Resumify.</div>
+        </div>
+    {% elif not has_skills %}
+        <div class="alert alert-info" role="alert">
+            <div>Add your skills on your <a href="{{ url_for('profile') }}">profile</a> to rank these properly —
+                without them the match percentage only reflects your target roles and location.</div>
+        </div>
+    {% endif %}
+
+    <!-- Filters -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('jobs') }}" class="row g-2 align-items-end">
+                <div class="col-12 col-md">
+                    <label class="form-label" for="q">Search</label>
+                    <input type="text" class="form-control" id="q" name="q" value="{{ search }}"
+                           placeholder="Title, company or location">
+                </div>
+                <div class="col-6 col-md-auto">
+                    <label class="form-label" for="source">Source</label>
+                    <select class="form-select" id="source" name="source">
+                        <option value="">All</option>
+                        {% for s in sources %}
+                            <option value="{{ s }}" {% if s == selected_source %}selected{% endif %}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-auto">
+                    <label class="form-label" for="category">Category</label>
+                    <select class="form-select" id="category" name="category">
+                        <option value="">All</option>
+                        {% for c in categories %}
+                            <option value="{{ c }}" {% if c == selected_category %}selected{% endif %}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-md-auto">
+                    <label class="form-check mb-2 mb-md-0">
+                        <input class="form-check-input" type="checkbox" name="hide_applied" value="1"
+                               {% if hide_applied %}checked{% endif %}>
+                        <span class="form-check-label">Hide applied</span>
+                    </label>
+                </div>
+                <div class="col-12 col-md-auto">
+                    <button type="submit" class="btn btn-primary w-100">Filter</button>
+                </div>
+            </form>
+
+            {% if signed_in and saved_resumes %}
+                <div class="mt-3 pt-3 border-top d-flex flex-wrap align-items-center gap-2">
+                    <label class="form-label mb-0 text-secondary" for="apply-resume">CV to attach when applying</label>
+                    <select class="form-select w-auto" id="apply-resume">
+                        {% for r in saved_resumes %}
+                            <option value="{{ r.id }}">
+                                {{ r.full_name or 'Resume' }} &middot; {{ r.template }}
+                                {%- if r.created_at %} &middot; {{ r.created_at.strftime('%d %b %Y') }}{% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% elif signed_in %}
+                <div class="mt-3 pt-3 border-top text-secondary small">
+                    No saved CV yet — <a href="{{ url_for('generate_cv') }}">generate one</a> and it'll be
+                    attached automatically when you apply.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Results -->
+    {% if not jobs %}
+        <div class="card">
+            <div class="card-body">
+                <p class="jobs-empty mb-0">
+                    No postings match those filters.
+                    <a href="{{ url_for('jobs') }}">Clear filters</a> or refresh the listings.
+                </p>
+            </div>
+        </div>
+    {% else %}
+        <div class="row row-cards">
+            {% for job in jobs %}
+                <div class="col-12">
+                    <div class="card job-card" data-job-id="{{ job.id }}">
+                        <div class="card-body">
+                            <div class="d-flex flex-wrap align-items-start gap-3">
+                                <div class="flex-fill" style="min-width: 0;">
+                                    <h3 class="card-title mb-1">{{ job.title }}</h3>
+                                    <div class="text-secondary">
+                                        <strong>{{ job.company }}</strong>
+                                        {% if job.location %} &middot; {{ job.location }}{% endif %}
+                                    </div>
+                                    <div class="mt-2">
+                                        <span class="badge bg-secondary-lt">{{ job.source }}</span>
+                                        {# Most boards without a real department field fall back to the
+                                           inferred category - don't print the same word twice. #}
+                                        {% if job.department and job.department != job.category %}
+                                            <span class="badge bg-secondary-lt">{{ job.department }}</span>
+                                        {% endif %}
+                                        <span class="badge bg-secondary-lt">{{ job.category }}</span>
+                                        {# Lever is the one board we can deep-link past the
+                                           description straight to the application form. #}
+                                        {% if job.ats_type == 'lever' %}
+                                            <span class="badge bg-primary-lt">direct apply link</span>
+                                        {% endif %}
+                                        {% if job.applied %}
+                                            <span class="badge bg-green-lt applied-badge">applied</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if job.matched_skills %}
+                                        <div class="mt-2 small text-secondary">
+                                            Matched: {{ job.matched_skills|join(', ') }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                {# A guest has no profile to match against, so the number would be
+                                   meaningless - show the prompt to sign in instead. #}
+                                {% if signed_in %}
+                                    <div class="match-badge {% if job.match_percentage >= 70 %}match-high{% elif job.match_percentage >= 30 %}match-mid{% else %}match-low{% endif %}">
+                                        {{ job.match_percentage }}%
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="btn-list mt-3">
+                                {% if not signed_in %}
+                                    {# Browsing is open; applying needs an account. Send them to
+                                       login and bring them straight back to this list. #}
+                                    <a href="{{ url_for('login', next=url_for('jobs')) }}"
+                                       class="btn btn-primary">Log in to apply</a>
+                                {% else %}
+                                    <button type="button" class="btn btn-primary apply-btn"
+                                            data-job-id="{{ job.id }}"
+                                            data-job-title="{{ job.title }}"
+                                            data-job-company="{{ job.company }}">
+                                        Apply with Resumify
+                                    </button>
+                                {% endif %}
+                                <a href="{{ job.url }}" target="_blank" rel="noopener noreferrer"
+                                   class="btn btn-ghost-secondary">Open listing</a>
+                                {% if signed_in and not job.applied %}
+                                    <button type="button" class="btn btn-ghost-secondary mark-applied-btn"
+                                            data-job-id="{{ job.id }}">Mark applied</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <!-- Application kit -->
+    <div id="apply-modal" class="cv-modal-overlay" style="display:none;">
+        <div class="cv-modal apply-modal">
+            <div class="cv-modal-header">
+                <div>
+                    <h3 class="m-0" id="apply-modal-title">Apply</h3>
+                    <div class="text-secondary small" id="apply-modal-sub"></div>
+                </div>
+                <button type="button" class="cv-modal-close" id="apply-modal-close" aria-label="Close">&times;</button>
+            </div>
+
+            <div class="cv-modal-body" id="apply-modal-body">
+                <div class="apply-stage text-center py-4" id="apply-stage-loading">
+                    <div class="spinner"></div>
+                    <p class="cv-loading-text" id="apply-status-text">Preparing your application&hellip;</p>
+                </div>
+
+                <div class="apply-stage" id="apply-stage-kit" style="display:none;">
+                    <div class="alert alert-info" role="alert">
+                        <div id="apply-note"></div>
+                        <div class="small text-secondary mt-1" id="apply-why"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h4 class="apply-section-title mb-0">Your details</h4>
+                            <button type="button" class="btn btn-sm" id="apply-copy-all">Copy all</button>
+                        </div>
+                        <div class="row g-2" id="apply-fields"></div>
+                    </div>
+
+                    <div id="apply-resume-row" class="mb-1"></div>
+                </div>
+            </div>
+
+            <div class="cv-modal-footer">
+                <button type="button" class="btn btn-ghost-secondary" id="apply-cancel-btn">Close</button>
+                <a href="#" target="_blank" rel="noopener noreferrer"
+                   class="btn btn-primary" id="apply-open-btn" style="display:none;">Open application form</a>
+                <button type="button" class="btn btn-success" id="apply-done-btn" style="display:none;">
+                    I&rsquo;ve submitted this
+                </button>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    const form = document.getElementById('job-search-form');
-    const statusEl = document.getElementById('jobs-status');
-    const resultsEl = document.getElementById('jobs-results');
-    const searchBtn = document.getElementById('search-btn');
-    const modal = document.getElementById('cv-modal');
-    const modalBody = document.getElementById('cv-modal-body');
+(function () {
+    const modal = document.getElementById('apply-modal');
+    if (!modal) return;   // guest view has no apply controls
 
-    let lastSkills = '';
+    const titleEl = document.getElementById('apply-modal-title');
+    const subEl = document.getElementById('apply-modal-sub');
+    const statusText = document.getElementById('apply-status-text');
+    const stageLoading = document.getElementById('apply-stage-loading');
+    const stageKit = document.getElementById('apply-stage-kit');
+    const openBtn = document.getElementById('apply-open-btn');
+    const doneBtn = document.getElementById('apply-done-btn');
+    const cancelBtn = document.getElementById('apply-cancel-btn');
+
+    let currentJobId = null;
+    let copyText = '';
 
     function escapeHtml(str) {
         const div = document.createElement('div');
@@ -82,131 +273,135 @@
         return div.innerHTML;
     }
 
-    function matchClass(pct) {
-        if (pct >= 70) return 'match-high';
-        if (pct >= 30) return 'match-mid';
-        return 'match-low';
+    function showStage(which) {
+        stageLoading.style.display = which === 'loading' ? '' : 'none';
+        stageKit.style.display = which === 'kit' ? '' : 'none';
     }
 
-    function renderJobs(jobs, liveSearch) {
-        resultsEl.innerHTML = '';
+    function closeModal() { modal.style.display = 'none'; }
 
-        if (!jobs.length) {
-            resultsEl.innerHTML = '<p class="jobs-empty">No matching jobs found. Try broadening your search.</p>';
-            return;
-        }
+    function renderKit(kit) {
+        document.getElementById('apply-note').textContent = kit.note || '';
+        document.getElementById('apply-why').textContent = kit.why_manual || '';
 
-        if (liveSearch === false) {
-            const note = document.createElement('p');
-            note.className = 'jobs-live-note';
-            note.textContent = 'Live search was unavailable, so these results are AI-generated based on typical postings for this role.';
-            resultsEl.appendChild(note);
-        }
-
-        jobs.forEach((job, idx) => {
-            const pct = Math.max(0, Math.min(100, parseInt(job.match_percentage, 10) || 0));
-            const card = document.createElement('div');
-            card.className = 'job-card';
-
-            const keywords = Array.isArray(job.keywords) ? job.keywords : [];
-
-            card.innerHTML = `
-                <div class="job-card-top">
-                    <div>
-                        <h3 class="job-title">${escapeHtml(job.title || 'Untitled role')}</h3>
-                        <p class="job-company">${escapeHtml(job.company || 'Unknown company')}${job.location ? ' &middot; ' + escapeHtml(job.location) : ''}</p>
+        document.getElementById('apply-fields').innerHTML = (kit.fields || []).map((f) => `
+            <div class="col-12 col-sm-6">
+                <div class="apply-field">
+                    <div class="apply-field-label">${escapeHtml(f.label)}</div>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="apply-field-value flex-fill">${escapeHtml(f.value)}</div>
+                        <button type="button" class="btn btn-sm apply-copy" data-value="${escapeHtml(f.value)}">Copy</button>
                     </div>
-                    <div class="match-badge ${matchClass(pct)}">${pct}%</div>
                 </div>
-                <p class="job-desc">${escapeHtml(job.description || '')}</p>
-                ${job.source_url ? `<a href="${escapeHtml(job.source_url)}" target="_blank" rel="noopener noreferrer" class="job-link">View posting &rarr;</a>` : ''}
-                ${pct < 30 ? `<button type="button" class="submit-btn generate-cv-btn" data-idx="${idx}">Generate CV for this role</button>` : ''}
-            `;
+            </div>`).join('');
 
-            resultsEl.appendChild(card);
+        copyText = (kit.fields || []).map((f) => `${f.label}: ${f.value}`).join('\n');
 
-            if (pct < 30) {
-                const btn = card.querySelector('.generate-cv-btn');
-                btn.addEventListener('click', () => generateCv(job));
+        document.getElementById('apply-resume-row').innerHTML = kit.has_resume
+            ? `<a href="${escapeHtml(kit.resume_url)}" class="btn btn-ghost-secondary w-100">
+                 Download your tailored CV (PDF)
+               </a>`
+            : `<div class="text-secondary small">No saved CV to attach —
+                 <a href="{{ url_for('generate_cv') }}">generate one</a> first if the form requires it.</div>`;
+
+        openBtn.href = kit.apply_url;
+        openBtn.style.display = '';
+        openBtn.textContent = 'Open application form';
+        doneBtn.style.display = '';
+        showStage('kit');
+    }
+
+    document.querySelectorAll('.apply-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            currentJobId = btn.dataset.jobId;
+            titleEl.textContent = btn.dataset.jobTitle;
+            subEl.textContent = btn.dataset.jobCompany;
+            openBtn.style.display = 'none';
+            doneBtn.style.display = 'none';
+            doneBtn.disabled = false;
+            doneBtn.textContent = "I've submitted this";
+            statusText.textContent = 'Preparing your application…';
+            showStage('loading');
+            modal.style.display = 'flex';
+
+            const picker = document.getElementById('apply-resume');
+            const qs = picker && picker.value ? ('?resume_id=' + encodeURIComponent(picker.value)) : '';
+            try {
+                const res = await fetch('/jobs/' + currentJobId + '/apply-kit' + qs);
+                const data = await res.json();
+                if (!res.ok) { statusText.textContent = data.error || 'Could not prepare this application.'; return; }
+                renderKit(data);
+            } catch (err) {
+                statusText.textContent = 'Network error preparing the application.';
             }
         });
-    }
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        statusEl.style.display = 'block';
-        statusEl.textContent = 'Searching for jobs...';
-        resultsEl.innerHTML = '';
-        searchBtn.disabled = true;
-        searchBtn.textContent = 'Searching...';
-
-        const payload = {
-            job_title: document.getElementById('job_title').value.trim(),
-            location: document.getElementById('location').value.trim(),
-            experience_level: document.getElementById('experience_level').value,
-            skills: document.getElementById('skills').value.trim(),
-        };
-        lastSkills = payload.skills;
-
-        try {
-            const res = await fetch("{{ url_for('jobs_search') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                statusEl.textContent = data.error || 'Something went wrong.';
-                return;
-            }
-            statusEl.style.display = 'none';
-            renderJobs(data.jobs || [], data.live_search);
-        } catch (err) {
-            statusEl.textContent = 'Network error while searching for jobs.';
-        } finally {
-            searchBtn.disabled = false;
-            searchBtn.textContent = 'Search Jobs';
-        }
     });
 
-    async function generateCv(job) {
-        modal.style.display = 'flex';
-        modalBody.innerHTML = '<div class="spinner"></div><p class="cv-loading-text">Generating tailored CV...</p>';
-
-        try {
-            const res = await fetch("{{ url_for('jobs_generate_cv') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: job.title,
-                    company: job.company,
-                    job_description: job.job_description || job.description,
-                    keywords: job.keywords || [],
-                    skills: lastSkills,
-                }),
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                modalBody.innerHTML = `<p class="jobs-empty">${escapeHtml(data.error || 'Failed to generate CV.')}</p>`;
-                return;
-            }
-            modalBody.innerHTML = `<pre class="cv-text">${escapeHtml(data.cv)}</pre>`;
-        } catch (err) {
-            modalBody.innerHTML = '<p class="jobs-empty">Network error while generating CV.</p>';
-        }
-    }
-
-    document.getElementById('cv-modal-close').addEventListener('click', () => {
-        modal.style.display = 'none';
-    });
+    // Copy buttons
     modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.style.display = 'none';
+        const btn = e.target.closest('.apply-copy');
+        if (!btn) return;
+        navigator.clipboard.writeText(btn.dataset.value);
+        const original = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = original; }, 1200);
     });
-    document.getElementById('cv-copy-btn').addEventListener('click', () => {
-        const cvText = modalBody.querySelector('.cv-text');
-        if (cvText) {
-            navigator.clipboard.writeText(cvText.textContent);
-        }
+
+    document.getElementById('apply-copy-all').addEventListener('click', (e) => {
+        navigator.clipboard.writeText(copyText);
+        e.target.textContent = 'Copied';
+        setTimeout(() => { e.target.textContent = 'Copy all'; }, 1200);
     });
-    </script>
+
+    function markCardApplied(jobId) {
+        const card = document.querySelector(`.job-card[data-job-id="${jobId}"]`);
+        if (!card || card.querySelector('.applied-badge')) return;
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-green-lt applied-badge';
+        badge.textContent = 'applied';
+        card.querySelector('.card-body .mt-2').appendChild(badge);
+        const markBtn = card.querySelector('.mark-applied-btn');
+        if (markBtn) markBtn.remove();
+    }
+
+    doneBtn.addEventListener('click', async () => {
+        doneBtn.disabled = true;
+        try {
+            const res = await fetch("{{ url_for('jobs_mark_applied') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ job_id: currentJobId, status: 'submitted' }),
+            });
+            if (res.ok) { markCardApplied(currentJobId); closeModal(); }
+            else { doneBtn.disabled = false; }
+        } catch (err) { doneBtn.disabled = false; }
+    });
+
+    // Arriving from the home page's Apply button: open that job's kit straight away.
+    const autoApplyId = new URLSearchParams(location.search).get('apply');
+    if (autoApplyId) {
+        const target = document.querySelector(`.apply-btn[data-job-id="${autoApplyId}"]`);
+        if (target) { target.scrollIntoView({ block: 'center' }); target.click(); }
+    }
+
+    cancelBtn.addEventListener('click', closeModal);
+    document.getElementById('apply-modal-close').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    document.querySelectorAll('.mark-applied-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+                const res = await fetch("{{ url_for('jobs_mark_applied') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ job_id: btn.dataset.jobId }),
+                });
+                if (res.ok) { markCardApplied(btn.dataset.jobId); }
+                else { btn.disabled = false; }
+            } catch (err) { btn.disabled = false; }
+        });
+    });
+})();
+</script>
 {% endblock %}

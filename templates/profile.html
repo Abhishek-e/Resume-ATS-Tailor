@@ -49,6 +49,121 @@
 <div class="row g-3">
     <div class="col">
         <div class="row row-cards">
+
+            <!-- Applications dashboard -->
+            <div class="col-12" id="applications">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Applications</h3>
+                        <div class="card-actions">
+                            <a href="{{ url_for('jobs') }}" class="btn btn-sm btn-primary">Find jobs</a>
+                        </div>
+                    </div>
+
+                    {% if analytics.total %}
+                        <div class="card-body border-bottom">
+                            <div class="row g-3 stat-row">
+                                <div class="col-6 col-lg-3">
+                                    <div class="stat-tile">
+                                        <div class="stat-label">Total applications</div>
+                                        <div class="stat-value">{{ analytics.total }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-lg-3">
+                                    <div class="stat-tile">
+                                        <div class="stat-label">Submitted via Resumify</div>
+                                        <div class="stat-value">{{ analytics.submitted }}</div>
+                                        <div class="stat-sub">{{ analytics.manual }} tracked manually</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-lg-3">
+                                    <div class="stat-tile">
+                                        <div class="stat-label">Companies</div>
+                                        <div class="stat-value">{{ analytics.companies }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-lg-3">
+                                    <div class="stat-tile">
+                                        <div class="stat-label">Average match</div>
+                                        <div class="stat-value">{{ analytics.avg_match }}%</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card-body border-bottom">
+                            <div class="row g-4">
+                                {% for chart in [
+                                    {'title': 'By department', 'rows': analytics.by_department},
+                                    {'title': 'By job category', 'rows': analytics.by_category}
+                                ] %}
+                                <div class="col-12 col-lg-6">
+                                    <h4 class="chart-title">{{ chart.title }}</h4>
+                                    <div class="bar-chart" role="table"
+                                         aria-label="Applications {{ chart.title|lower }}">
+                                        {% for row in chart.rows[:8] %}
+                                            <div class="bar-row" role="row">
+                                                <div class="bar-name" role="cell" title="{{ row.name }}">{{ row.name }}</div>
+                                                <div class="bar-track" role="cell">
+                                                    <div class="bar-fill" style="width: {{ row.percent }}%;"></div>
+                                                </div>
+                                                <div class="bar-value" role="cell">
+                                                    {{ row.count }}<span class="bar-pct">{{ row.percent }}%</span>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                        {% if chart.rows|length > 8 %}
+                                            <div class="bar-more">
+                                                +{{ chart.rows|length - 8 }} more
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="list-group list-group-flush resume-list">
+                            {% for a in applications %}
+                            <div class="list-group-item resume-row">
+                                <div class="row align-items-center">
+                                    <div class="col text-truncate">
+                                        <a href="{{ a.url }}" target="_blank" rel="noopener noreferrer"
+                                           class="text-body d-block fw-medium text-truncate">{{ a.title }}</a>
+                                        {# No text-truncate here: these badges are the department and
+                                           category the dashboard is about, so wrap them on narrow
+                                           screens rather than clipping them off the right edge. #}
+                                        <div class="text-secondary application-meta mt-n1">
+                                            {{ a.company }}{% if a.location %} &middot; {{ a.location }}{% endif %}
+                                            <span class="badge {% if a.status == 'submitted' %}bg-green-lt{% else %}bg-secondary-lt{% endif %}">
+                                                {{ 'submitted' if a.status == 'submitted' else 'tracked' }}
+                                            </span>
+                                            <span class="badge bg-secondary-lt">{{ a.department }}</span>
+                                            <span class="badge bg-secondary-lt">{{ a.category }}</span>
+                                            {% if a.created_at %}&middot; {{ a.created_at.strftime('%d %b %Y') }}{% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <form method="POST" action="{{ url_for('application_delete', application_id=a.id) }}">
+                                            <button type="submit" class="btn btn-sm btn-icon delete-icon-btn"
+                                                    title="Remove from tracker" aria-label="Remove from tracker">&times;</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="card-body">
+                            <p class="text-secondary mb-0">
+                                No applications tracked yet. <a href="{{ url_for('jobs') }}">Find jobs</a> and apply —
+                                anything you send or mark applied shows up here with a breakdown by department and category.
+                            </p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
@@ -193,9 +308,21 @@
                                 <span class="text-secondary">LinkedIn:</span>
                                 <strong id="view-linkedin">{{ profile_details.linkedin or '—' }}</strong>
                             </div>
-                            <div>
+                            <div class="mb-2">
                                 <span class="text-secondary">Other:</span>
                                 <strong id="view-other">{{ profile_details.other or '—' }}</strong>
+                            </div>
+                            <div class="mb-2">
+                                <span class="text-secondary">Phone:</span>
+                                <strong id="view-phone">{{ profile_details.phone or '—' }}</strong>
+                            </div>
+                            <div class="mb-2">
+                                <span class="text-secondary">Skills:</span>
+                                <strong id="view-skills">{{ profile_details.skills or '—' }}</strong>
+                            </div>
+                            <div>
+                                <span class="text-secondary">Target roles:</span>
+                                <strong id="view-desired_titles">{{ profile_details.desired_titles or '—' }}</strong>
                             </div>
                         </div>
 
@@ -227,6 +354,19 @@
                             <div class="mb-2">
                                 <label class="form-label" for="d_other">Other Link <span class="form-label-description">optional</span></label>
                                 <input type="text" id="d_other" name="other" placeholder="portfolio, twitter, etc." value="{{ profile_details.other or '' }}" class="form-control">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label" for="d_phone">Phone <span class="form-label-description">used to pre-fill applications</span></label>
+                                <input type="tel" id="d_phone" name="phone" placeholder="+91 90000 00000" value="{{ profile_details.phone or '' }}" class="form-control">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label" for="d_skills">Skills <span class="form-label-description">drives your job match %</span></label>
+                                <textarea id="d_skills" name="skills" rows="2" class="form-control"
+                                          placeholder="python, react, sql, aws, docker">{{ profile_details.skills or '' }}</textarea>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label" for="d_desired_titles">Target roles <span class="form-label-description">comma separated</span></label>
+                                <input type="text" id="d_desired_titles" name="desired_titles" placeholder="software engineer, backend engineer" value="{{ profile_details.desired_titles or '' }}" class="form-control">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label" for="d_about_me">About Me <span class="form-label-description">optional</span></label>
@@ -320,6 +460,9 @@
             linkedin: document.getElementById('d_linkedin').value.trim(),
             other: document.getElementById('d_other').value.trim(),
             about_me: document.getElementById('d_about_me').value.trim(),
+            phone: document.getElementById('d_phone').value.trim(),
+            skills: document.getElementById('d_skills').value.trim(),
+            desired_titles: document.getElementById('d_desired_titles').value.trim(),
         };
 
         try {
@@ -341,6 +484,9 @@
             document.getElementById('view-github').textContent = payload.github || '—';
             document.getElementById('view-linkedin').textContent = payload.linkedin || '—';
             document.getElementById('view-other').textContent = payload.other || '—';
+            document.getElementById('view-phone').textContent = payload.phone || '—';
+            document.getElementById('view-skills').textContent = payload.skills || '—';
+            document.getElementById('view-desired_titles').textContent = payload.desired_titles || '—';
             document.getElementById('view-about_me').textContent = payload.about_me || aboutPlaceholder;
             document.getElementById('header-about').textContent = payload.about_me || headerAboutPlaceholder;
 

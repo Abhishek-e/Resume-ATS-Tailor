@@ -7,3 +7,8 @@ firebase-admin
 xhtml2pdf
 python-docx
 pypdf
+
+# Find Jobs board connectors. The assisted-apply flow is pure stdlib on top of
+# these - no browser engine, so nothing here needs system packages.
+requests
+feedparser

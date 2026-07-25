@@ -818,6 +818,15 @@ body {
     box-shadow: var(--rs-shadow-card);
 }
 
+/* The rows wrap their content in a Bootstrap .row, which as a flex item of
+   the line above would size to its content - leaving the trailing action
+   column floating mid-row instead of pinned right. */
+.resume-row > .row {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+}
+
 .resume-name { font-weight: 600; font-size: .95rem; }
 .resume-meta { font-size: .8125rem; color: var(--tblr-secondary); }
 
@@ -933,4 +942,212 @@ body {
     .hero, .jobs-hero { padding: 2.5rem 1rem 1.75rem; }
     .cv-preview-frame { height: 560px; }
     .plag-score-row { justify-content: center; text-align: center; }
+}
+
+/* --------------------------------------------------------------------------
+   Theme toggle + dark theme
+   The custom layer is built on Tabler tokens (--tblr-bg-surface, -border-color,
+   -body-color), which Tabler re-points automatically under [data-bs-theme=dark].
+   Only the values that were hard-coded for a light background need overriding.
+   -------------------------------------------------------------------------- */
+
+.theme-toggle {
+    border: 0;
+    background: transparent;
+    color: var(--tblr-secondary);
+    transition: color .2s, background .2s;
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
+    color: var(--tblr-primary);
+    background: var(--tblr-primary-lt);
+}
+
+:root[data-bs-theme="dark"] {
+    /* Shadows tuned for a light page read as flat grey on a dark one - swap to
+       pure-black spreads so cards keep their lift. */
+    --rs-shadow-card: 0 1px 2px rgba(0, 0, 0, .35), 0 8px 24px -12px rgba(0, 0, 0, .6);
+    --rs-shadow-lift: 0 18px 40px -18px rgba(0, 0, 0, .75), 0 2px 6px rgba(0, 0, 0, .4);
+}
+
+:root[data-bs-theme="dark"] .cv-modal-overlay { background: rgba(0, 0, 0, .7); }
+:root[data-bs-theme="dark"] .cv-modal { box-shadow: 0 30px 70px -20px rgba(0, 0, 0, .85); }
+
+/* Brighter accents so the home-page card stripes stay legible on dark. */
+:root[data-bs-theme="dark"] .cards-container .card:nth-child(1) { --accent: #8b7cf6; }
+:root[data-bs-theme="dark"] .cards-container .card:nth-child(2) { --accent: #2fb344; }
+:root[data-bs-theme="dark"] .cards-container .card:nth-child(3) { --accent: #d16bec; }
+:root[data-bs-theme="dark"] .cards-container .card:nth-child(4) { --accent: #ff922b; }
+:root[data-bs-theme="dark"] .cards-container .card:nth-child(5) { --accent: #4dabf7; }
+
+/* --------------------------------------------------------------------------
+   Find Jobs - assisted apply
+   -------------------------------------------------------------------------- */
+
+.apply-modal { width: min(920px, 100%); }
+
+.apply-field {
+    padding: .5rem .75rem;
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius);
+    background: var(--tblr-bg-surface-secondary);
+    height: 100%;
+}
+
+.apply-field-label {
+    font-size: .6875rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--tblr-secondary);
+}
+
+.apply-field-value {
+    font-size: .875rem;
+    word-break: break-word;
+}
+
+/* The captured form runs to several thousand pixels; scroll it in place
+   rather than letting it stretch the modal past the viewport. */
+.apply-shot-wrap {
+    max-height: 46vh;
+    overflow: auto;
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius);
+    background: #fff;
+}
+
+.apply-shot { display: block; width: 100%; height: auto; }
+
+.job-card .card-title { line-height: 1.3; }
+
+@media (max-width: 576px) {
+    .apply-shot-wrap { max-height: 40vh; }
+    .apply-modal .cv-modal-footer { flex-wrap: wrap; gap: .5rem; }
+}
+
+/* --------------------------------------------------------------------------
+   Applications dashboard
+   Bars encode magnitude, so they carry a single hue and let length do the
+   work - no categorical palette, and no colour on the text. Labels sit on
+   every row (the lists are short), so identity is never colour-alone.
+   -------------------------------------------------------------------------- */
+
+.stat-tile { min-width: 0; }
+
+.stat-label {
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    color: var(--tblr-secondary);
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -.02em;
+    color: var(--tblr-body-color);
+}
+
+.stat-sub { font-size: .75rem; color: var(--tblr-secondary); }
+
+.chart-title {
+    font-size: .8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--tblr-secondary);
+    margin-bottom: .75rem;
+}
+
+.bar-chart { display: grid; gap: .5rem; }
+
+.bar-row {
+    display: grid;
+    grid-template-columns: minmax(0, 8.5rem) 1fr auto;
+    align-items: center;
+    gap: .75rem;
+}
+
+.bar-name {
+    font-size: .8125rem;
+    color: var(--tblr-body-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bar-track {
+    height: 10px;
+    border-radius: 999px;
+    background: var(--tblr-bg-surface-secondary);
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    /* 4px rounded data-end, anchored flat to the baseline at the origin. */
+    border-radius: 0 4px 4px 0;
+    background: var(--tblr-primary);
+    min-width: 3px;
+    transition: width .5s var(--rs-ease);
+}
+
+.bar-value {
+    font-size: .8125rem;
+    font-weight: 600;
+    color: var(--tblr-body-color);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.bar-pct {
+    margin-left: .375rem;
+    font-weight: 400;
+    color: var(--tblr-secondary);
+}
+
+.bar-more { font-size: .75rem; color: var(--tblr-secondary); padding-top: .125rem; }
+
+/* Brand primary is dark enough to sit on white but muddies against the dark
+   surface - step it up so the fill keeps clearing 3:1 there. */
+:root[data-bs-theme="dark"] .bar-fill { background: #8b7cf6; }
+
+@media (max-width: 480px) {
+    .bar-row { grid-template-columns: minmax(0, 6.5rem) 1fr auto; gap: .5rem; }
+    .stat-value { font-size: 1.5rem; }
+}
+
+.application-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .25rem .375rem;
+    font-size: .875rem;
+}
+
+/* --------------------------------------------------------------------------
+   Home - live jobs section
+   -------------------------------------------------------------------------- */
+
+.home-jobs { padding: 0 0 3.5rem; }
+
+.home-jobs-title {
+    font-size: 1.375rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    margin: 0 0 .25rem;
+}
+
+.home-jobs-sub {
+    color: var(--tblr-secondary);
+    font-size: .9375rem;
+    max-width: 70ch;
+}
+
+.home-jobs .card-title {
+    font-size: 1rem;
+    line-height: 1.35;
 }

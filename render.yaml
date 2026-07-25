@@ -1,12 +1,27 @@
 services:
   - type: web
     name: resume-ats-tailor
+    # Plain Python runtime - no Dockerfile, no browser engine, no system
+    # packages. Everything here installs from PyPI on the free plan.
     runtime: python
+    plan: free
+    healthCheckPath: /
 
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --timeout 120
+    # One worker with threads, not multiple processes: the job listing cache
+    # lives in process memory, so a second worker would hold its own copy and
+    # "Refresh listings" would only update whichever one served the request.
+    # Threads give the concurrency without splitting that cache.
+    startCommand: >-
+      gunicorn app:app
+      --workers 1
+      --threads 8
+      --timeout 120
+      --access-logfile -
 
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
       - key: FIREBASE_CREDENTIALS_JSON
         sync: false
       - key: SECRET_KEY
@@ -19,3 +34,24 @@ services:
         sync: false
       - key: OPENROUTER_MODEL
         sync: false
+
+      # --- Find Jobs -----------------------------------------------------
+      # Comma-separated. Board tokens come from the careers-page URL:
+      # boards.greenhouse.io/<token> and jobs.lever.co/<company>.
+      # Greenhouse postings are the ones that open pre-filled, so favour
+      # employers who host on boards.greenhouse.io rather than their own domain.
+      - key: GREENHOUSE_BOARDS
+        value: "figma,gitlab,discord"
+      - key: LEVER_COMPANIES
+        value: "leverdemo"
+      - key: WWR_CATEGORY
+        value: "remote-programming-jobs"
+      # Optional extra source; stays off unless a free key is supplied.
+      # https://developer.usajobs.gov/
+      - key: USAJOBS_API_KEY
+        sync: false
+      - key: USAJOBS_USER_AGENT
+        sync: false
+      # Politeness delay between board requests during a refresh.
+      - key: FETCH_DELAY_SECONDS
+        value: "1.0"

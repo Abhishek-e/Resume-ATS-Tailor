@@ -1,9 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Resumify{% endblock %}</title>
+    <!-- Applied before the stylesheets paint so a dark-mode user never sees a
+         white flash. Tabler keys its whole palette off data-bs-theme on :root. -->
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('resumify-theme');
+                if (saved === 'dark' || saved === 'light') {
+                    document.documentElement.setAttribute('data-bs-theme', saved);
+                }
+            } catch (e) { /* private mode - stay on the default light theme */ }
+        })();
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/tabler/css/tabler.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -19,7 +31,25 @@
                 <a href="{{ url_for('home') }}">RESUMIFY</a>
             </h1>
 
-            <div class="navbar-nav flex-row order-md-last">
+            <div class="navbar-nav flex-row order-md-last align-items-center">
+                <button type="button" id="theme-toggle" class="btn btn-icon btn-ghost-secondary theme-toggle me-1"
+                        aria-label="Switch to dark theme" title="Switch to dark theme">
+                    <!-- Sun shows in dark mode (click to go light), moon in light mode. -->
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon hide-theme-light" width="24" height="24"
+                         viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/>
+                        <path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7"/>
+                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon hide-theme-dark" width="24" height="24"
+                         viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/>
+                    </svg>
+                </button>
+
                 {% if session.user_id %}
                     <div class="nav-item dropdown">
                         <a href="#" class="nav-link d-flex lh-1 p-0 px-2" data-bs-toggle="dropdown">
@@ -108,6 +138,29 @@
 </div>
 
 <script src="{{ url_for('static', filename='vendor/tabler/js/tabler.min.js') }}" defer></script>
+<script>
+    (function () {
+        var root = document.documentElement;
+        var btn = document.getElementById('theme-toggle');
+        if (!btn) return;
+
+        function label() {
+            var next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+            var text = 'Switch to ' + next + ' theme';
+            btn.setAttribute('aria-label', text);
+            btn.setAttribute('title', text);
+        }
+
+        btn.addEventListener('click', function () {
+            var next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+            root.setAttribute('data-bs-theme', next);
+            try { localStorage.setItem('resumify-theme', next); } catch (e) { /* ignore */ }
+            label();
+        });
+
+        label();
+    })();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
