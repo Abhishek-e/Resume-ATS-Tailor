@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Cover Letter - Resumify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
+        </div>
+        <div class="nav-center">
+            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
+        </div>
+        <div class="nav-right">
+            <a href="{{ url_for('profile') }}" style="color: #ffffff; font-size: 14px; margin-right: 10px; text-decoration: none;">{{ session.username }}</a>
+            <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
+        </div>
+    </nav>
+
+    <section class="jobs-hero">
+        <h1>Generate your cover letter</h1>
+        <p class="subtitle">Tell us about the role and yourself, let AI write a tailored, ATS-friendly cover letter, then pick a style and export it.</p>
+    </section>
+
+    <section class="cv-builder-section">
+        <form id="cl-form" class="jobs-search-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="full_name">Full Name *</label>
+                    <input type="text" id="full_name" name="full_name" placeholder="e.g. Jordan Lee" required>
+                </div>
+                <div class="form-group">
+                    <label for="target_role">Target Job Title *</label>
+                    <input type="text" id="target_role" name="target_role" placeholder="e.g. Product Designer" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="company_name">Company Name *</label>
+                    <input type="text" id="company_name" name="company_name" placeholder="e.g. Acme Inc" required>
+                </div>
+                <div class="form-group">
+                    <label for="hiring_manager">Hiring Manager Name <span class="optional-tag">optional</span></label>
+                    <input type="text" id="hiring_manager" name="hiring_manager" placeholder="e.g. Sam Rivera">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" placeholder="you@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone</label>
+                    <input type="text" id="phone" name="phone" placeholder="+1 555 123 4567">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="location">Location</label>
+                    <input type="text" id="location" name="location" placeholder="City, Country">
+                </div>
+                <div class="form-group">
+                    <label for="linkedin">LinkedIn</label>
+                    <input type="text" id="linkedin" name="linkedin" placeholder="linkedin.com/in/you">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="portfolio">Portfolio / Website</label>
+                <input type="text" id="portfolio" name="portfolio" placeholder="yourwebsite.com">
+            </div>
+            <div class="form-group">
+                <label for="job_description">Job Description / Key Requirements <span class="optional-tag">optional, helps tailor the letter</span></label>
+                <textarea id="job_description" name="job_description" rows="3" placeholder="Paste key requirements from the job posting..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="background">Your Background / Key Achievements</label>
+                <textarea id="background" name="background" rows="4" placeholder="e.g. 5 years in product design, led a redesign that increased conversion by 20%, strong background in Figma and user research..."></textarea>
+            </div>
+            <button type="submit" class="submit-btn" id="generate-btn">Generate Cover Letter</button>
+        </form>
+
+        <div id="cl-status" class="jobs-status" style="display:none;"></div>
+
+        <div id="preview-section" class="cv-preview-section">
+            <div class="cv-preview-header">
+                <div class="template-switcher">
+                    <button type="button" class="template-btn active" data-template="modern">Modern</button>
+                    <button type="button" class="template-btn" data-template="classic">Classic</button>
+                    <button type="button" class="template-btn" data-template="minimal">Minimal</button>
+                </div>
+                <div class="cv-preview-actions">
+                    <button type="button" class="resume-btn" id="download-pdf-btn">Download PDF</button>
+                    <button type="button" class="resume-btn" id="download-word-btn">Download Word</button>
+                    <button type="button" class="submit-btn" id="save-btn" style="width:auto; padding:10px 22px;">Save to Profile</button>
+                </div>
+            </div>
+            <div id="save-status" class="jobs-status" style="display:none;"></div>
+            <div class="cv-preview-frame-wrap">
+                <iframe id="preview-frame" class="cv-preview-frame" title="Cover letter preview"></iframe>
+            </div>
+        </div>
+    </section>
+
+    <script>
+    const form = document.getElementById('cl-form');
+    const generateBtn = document.getElementById('generate-btn');
+    const statusEl = document.getElementById('cl-status');
+    const previewSection = document.getElementById('preview-section');
+    const previewFrame = document.getElementById('preview-frame');
+    const templateBtns = document.querySelectorAll('.template-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const saveStatus = document.getElementById('save-status');
+    const downloadPdfBtn = document.getElementById('download-pdf-btn');
+    const downloadWordBtn = document.getElementById('download-word-btn');
+
+    let currentLetter = null;
+    let currentInputData = null;
+    let currentTemplate = 'modern';
+
+    function slugify(text) {
+        return (text || 'cover-letter').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'cover-letter';
+    }
+
+    function triggerDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    async function renderPreview() {
+        previewFrame.style.opacity = 0;
+        const res = await fetch("{{ url_for('generate_cover_letter_render') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ template: currentTemplate, letter: currentLetter }),
+        });
+        const html = await res.text();
+        previewFrame.srcdoc = html;
+        previewFrame.onload = () => { previewFrame.style.opacity = 1; };
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Writing your cover letter with AI...';
+        generateBtn.disabled = true;
+        generateBtn.textContent = 'Generating...';
+        previewSection.classList.remove('visible');
+
+        const payload = {
+            full_name: document.getElementById('full_name').value.trim(),
+            target_role: document.getElementById('target_role').value.trim(),
+            company_name: document.getElementById('company_name').value.trim(),
+            hiring_manager: document.getElementById('hiring_manager').value.trim(),
+            email: document.getElementById('email').value.trim(),
+            phone: document.getElementById('phone').value.trim(),
+            location: document.getElementById('location').value.trim(),
+            linkedin: document.getElementById('linkedin').value.trim(),
+            portfolio: document.getElementById('portfolio').value.trim(),
+            job_description: document.getElementById('job_description').value.trim(),
+            background: document.getElementById('background').value.trim(),
+        };
+
+        try {
+            const res = await fetch("{{ url_for('generate_cover_letter_build') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                statusEl.textContent = data.error || 'Something went wrong.';
+                return;
+            }
+            currentLetter = data.letter;
+            currentInputData = payload;
+            statusEl.style.display = 'none';
+            saveStatus.style.display = 'none';
+            templateBtns.forEach(b => b.classList.remove('active'));
+            document.querySelector('.template-btn[data-template="modern"]').classList.add('active');
+            currentTemplate = 'modern';
+            await renderPreview();
+            previewSection.classList.add('visible');
+            previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (err) {
+            statusEl.textContent = 'Network error while generating your cover letter.';
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.textContent = 'Generate Cover Letter';
+        }
+    });
+
+    templateBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (!currentLetter) return;
+            templateBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentTemplate = btn.dataset.template;
+            renderPreview();
+        });
+    });
+
+    downloadPdfBtn.addEventListener('click', async () => {
+        if (!currentLetter) return;
+        downloadPdfBtn.textContent = 'Preparing...';
+        try {
+            const res = await fetch("{{ url_for('generate_cover_letter_download_pdf') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ template: currentTemplate, letter: currentLetter }),
+            });
+            if (!res.ok) throw new Error('failed');
+            const blob = await res.blob();
+            triggerDownload(blob, `${slugify(currentLetter.full_name)}-cover-letter.pdf`);
+        } catch (err) {
+            alert('Failed to generate PDF.');
+        } finally {
+            downloadPdfBtn.textContent = 'Download PDF';
+        }
+    });
+
+    downloadWordBtn.addEventListener('click', async () => {
+        if (!currentLetter) return;
+        downloadWordBtn.textContent = 'Preparing...';
+        try {
+            const res = await fetch("{{ url_for('generate_cover_letter_download_docx') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ template: currentTemplate, letter: currentLetter }),
+            });
+            if (!res.ok) throw new Error('failed');
+            const blob = await res.blob();
+            triggerDownload(blob, `${slugify(currentLetter.full_name)}-cover-letter.docx`);
+        } catch (err) {
+            alert('Failed to generate Word document.');
+        } finally {
+            downloadWordBtn.textContent = 'Download Word';
+        }
+    });
+
+    saveBtn.addEventListener('click', async () => {
+        if (!currentLetter || saveBtn.disabled) return;
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        saveStatus.style.display = 'block';
+        saveStatus.textContent = 'Saving to your profile...';
+        try {
+            const res = await fetch("{{ url_for('generate_cover_letter_save') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ template: currentTemplate, input_data: currentInputData, letter: currentLetter }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                saveStatus.textContent = data.error || 'Failed to save.';
+                return;
+            }
+            saveStatus.innerHTML = 'Saved! <a href="{{ url_for("profile") }}" style="color:#fff; text-decoration:underline;">View in your profile &rarr;</a>';
+        } catch (err) {
+            saveStatus.textContent = 'Network error while saving.';
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save to Profile';
+        }
+    });
+    </script>
+</body>
+</html>

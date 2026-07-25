@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plagiarism Checker - Resumify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
+        </div>
+        <div class="nav-center">
+            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
+        </div>
+        <div class="nav-right">
+            {% if session.user_id %}
+                <a href="{{ url_for('profile') }}" style="color: #ffffff; font-size: 14px; margin-right: 10px; text-decoration: none;">{{ session.username }}</a>
+                <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="nav-btn-login">Log In</a>
+                <a href="{{ url_for('register') }}" class="nav-btn-primary">Get Started</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <section class="jobs-hero">
+        <h1>Plagiarism Checker</h1>
+        <p class="subtitle">Paste your text or upload a document to check originality. Free to use, no account needed.</p>
+    </section>
+
+    <section class="cv-builder-section">
+        <form id="plag-form" class="jobs-search-form">
+            <div class="form-group">
+                <label for="plag-text">Paste your text</label>
+                <textarea id="plag-text" name="text" rows="10" placeholder="Paste the text you want to check (at least a few sentences)..."></textarea>
+            </div>
+
+            <div class="plag-upload-row">
+                <label for="plag-file" class="plag-upload-label">
+                    <span id="plag-file-name">Or upload a .txt, .docx, or .pdf file</span>
+                </label>
+                <input type="file" id="plag-file" name="file" accept=".txt,.docx,.pdf">
+            </div>
+
+            <label class="plag-toggle-row">
+                <input type="checkbox" id="exclude-citations" checked>
+                <span class="plag-toggle-switch"></span>
+                <span>Exclude quoted / cited text from scoring</span>
+            </label>
+
+            <button type="submit" class="submit-btn" id="plag-submit-btn">Check for Plagiarism</button>
+        </form>
+
+        <div id="plag-status" class="jobs-status" style="display:none;"></div>
+
+        <div id="plag-results" class="plag-results" style="display:none;">
+            <div class="plag-score-row">
+                <div class="plag-score-circle-wrap">
+                    <div class="plag-score-circle" id="plag-score-circle">
+                        <div class="plag-score-circle-inner">
+                            <span class="plag-score-number" id="plag-originality-number">100</span>
+                            <span class="plag-score-label">Originality</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="plag-score-details">
+                    <div id="plag-live-note" class="jobs-live-note" style="display:none;">Live search was unavailable, so this assessment is based on the model's general knowledge instead of real-time results.</div>
+                    <div id="plag-truncated-note" class="jobs-live-note" style="display:none;">Your text was longer than the analysis limit, so only the first part was checked.</div>
+                    <p id="plag-summary" class="plag-summary"></p>
+                    <button type="button" class="submit-btn" id="plag-download-btn" style="width:auto; padding:12px 24px;">Download PDF Report</button>
+                </div>
+            </div>
+
+            <div id="plag-matches-section">
+                <h2 class="profile-section-title">Flagged Passages</h2>
+                <div id="plag-matches-list" class="plag-matches-list"></div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+    const plagForm = document.getElementById('plag-form');
+    const plagSubmitBtn = document.getElementById('plag-submit-btn');
+    const plagStatus = document.getElementById('plag-status');
+    const plagResults = document.getElementById('plag-results');
+    const plagFile = document.getElementById('plag-file');
+    const plagFileName = document.getElementById('plag-file-name');
+    const plagText = document.getElementById('plag-text');
+    const downloadBtn = document.getElementById('plag-download-btn');
+
+    let lastReport = null;
+    let lastText = '';
+
+    plagFile.addEventListener('change', () => {
+        if (plagFile.files.length) {
+            plagFileName.textContent = plagFile.files[0].name;
+            plagText.disabled = true;
+            plagText.placeholder = 'Using uploaded file — clear the file to paste text instead.';
+        } else {
+            plagFileName.textContent = 'Or upload a .txt, .docx, or .pdf file';
+            plagText.disabled = false;
+            plagText.placeholder = 'Paste the text you want to check (at least a few sentences)...';
+        }
+    });
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str == null ? '' : String(str);
+        return div.innerHTML;
+    }
+
+    function scoreColor(pct) {
+        if (pct >= 80) return '#4ade80';
+        if (pct >= 50) return '#f0b429';
+        return '#f87171';
+    }
+
+    function renderReport(report, liveSearch, truncated) {
+        const originality = Math.max(0, Math.min(100, parseInt(report.originality_percentage, 10) || 0));
+        const color = scoreColor(originality);
+
+        document.getElementById('plag-originality-number').textContent = originality + '%';
+        const circle = document.getElementById('plag-score-circle');
+        circle.style.background = `conic-gradient(${color} ${originality * 3.6}deg, #222222 0deg)`;
+
+        document.getElementById('plag-summary').textContent = report.summary || '';
+        document.getElementById('plag-live-note').style.display = liveSearch ? 'none' : 'block';
+        document.getElementById('plag-truncated-note').style.display = truncated ? 'block' : 'none';
+
+        const matchesList = document.getElementById('plag-matches-list');
+        matchesList.innerHTML = '';
+        const matches = report.matches || [];
+
+        if (!matches.length) {
+            matchesList.innerHTML = '<p class="jobs-empty">No significant matches found.</p>';
+        } else {
+            matches.forEach((m) => {
+                const pct = Math.max(0, Math.min(100, parseInt(m.similarity_percentage, 10) || 0));
+                const card = document.createElement('div');
+                card.className = 'plag-match-card';
+                card.innerHTML = `
+                    <div class="plag-match-top">
+                        <div class="plag-match-pct" style="color: ${scoreColor(100 - pct)};">${pct}% match</div>
+                    </div>
+                    <div class="plag-match-excerpt">"${escapeHtml(m.excerpt)}"</div>
+                    <div class="plag-match-source">
+                        ${escapeHtml(m.source_description || '')}
+                        ${m.source_url ? `&middot; <a href="${escapeHtml(m.source_url)}" target="_blank" rel="noopener noreferrer">View source &rarr;</a>` : ''}
+                    </div>
+                `;
+                matchesList.appendChild(card);
+            });
+        }
+
+        plagResults.style.display = 'block';
+        plagResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    plagForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (plagSubmitBtn.disabled) return;
+        plagSubmitBtn.disabled = true;
+        plagSubmitBtn.textContent = 'Checking...';
+        plagStatus.style.display = 'block';
+        plagStatus.textContent = 'Analyzing your text for originality...';
+        plagResults.style.display = 'none';
+
+        const excludeCitations = document.getElementById('exclude-citations').checked;
+
+        try {
+            let res;
+            if (plagFile.files.length) {
+                const formData = new FormData();
+                formData.append('file', plagFile.files[0]);
+                formData.append('exclude_citations', excludeCitations ? 'true' : 'false');
+                res = await fetch("{{ url_for('plagiarism_checker_check') }}", { method: 'POST', body: formData });
+            } else {
+                res = await fetch("{{ url_for('plagiarism_checker_check') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: plagText.value, exclude_citations: excludeCitations }),
+                });
+            }
+
+            const data = await res.json();
+            if (!res.ok) {
+                plagStatus.textContent = data.error || 'Something went wrong.';
+                return;
+            }
+
+            plagStatus.style.display = 'none';
+            lastReport = data.report;
+            lastText = data.text;
+            renderReport(data.report, data.live_search, data.truncated);
+        } catch (err) {
+            plagStatus.textContent = 'Network error while checking your text.';
+        } finally {
+            plagSubmitBtn.disabled = false;
+            plagSubmitBtn.textContent = 'Check for Plagiarism';
+        }
+    });
+
+    downloadBtn.addEventListener('click', async () => {
+        if (!lastReport || downloadBtn.disabled) return;
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = 'Preparing...';
+        try {
+            const res = await fetch("{{ url_for('plagiarism_checker_download_pdf') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: lastText, report: lastReport }),
+            });
+            if (!res.ok) throw new Error('failed');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'plagiarism-report.pdf';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            alert('Failed to generate the PDF report.');
+        } finally {
+            downloadBtn.disabled = false;
+            downloadBtn.textContent = 'Download PDF Report';
+        }
+    });
+    </script>
+</body>
+</html>

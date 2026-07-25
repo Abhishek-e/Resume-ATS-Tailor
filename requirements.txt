@@ -1,0 +1,9 @@
+Flask
+gunicorn
+python-dotenv
+google-genai
+openai
+firebase-admin
+xhtml2pdf
+python-docx
+pypdf

@@ -1,0 +1,23 @@
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment variables / secrets
+.env
+.env.*
+serviceAccountKey.json
+firebase-credentials*.json
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Flask
+instance/
