@@ -1,27 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profile - Resumify</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <nav class="navbar">
-        <div class="nav-left">
-            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
-        </div>
-        <div class="nav-center">
-            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
-            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
-            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
-        </div>
-        <div class="nav-right">
-            <a href="{{ url_for('profile') }}" class="nav-btn-login">{{ session.username }}</a>
-            <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
-        </div>
-    </nav>
+{% extends "base.html" %}
+{% block title %}Profile - Resumify{% endblock %}
 
+{% block content %}
     <section class="jobs-hero">
         <h1>Your Profile</h1>
         <p class="subtitle">Signed in as <strong>{{ session.username }}</strong></p>
@@ -72,36 +52,36 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="d_full_name">Full Name</label>
-                        <input type="text" id="d_full_name" name="full_name" value="{{ profile_details.full_name or '' }}">
+                        <input type="text" id="d_full_name" name="full_name" value="{{ profile_details.full_name or '' }}" class="form-control">
                     </div>
                     <div class="form-group">
                         <label for="d_id_card_number">ID Card Number</label>
-                        <input type="text" id="d_id_card_number" name="id_card_number" value="{{ profile_details.id_card_number or '' }}">
+                        <input type="text" id="d_id_card_number" name="id_card_number" value="{{ profile_details.id_card_number or '' }}" class="form-control">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="d_college_name">College Name</label>
-                        <input type="text" id="d_college_name" name="college_name" value="{{ profile_details.college_name or '' }}">
+                        <input type="text" id="d_college_name" name="college_name" value="{{ profile_details.college_name or '' }}" class="form-control">
                     </div>
                     <div class="form-group">
                         <label for="d_location">Location</label>
-                        <input type="text" id="d_location" name="location" value="{{ profile_details.location or '' }}">
+                        <input type="text" id="d_location" name="location" value="{{ profile_details.location or '' }}" class="form-control">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="d_github">GitHub</label>
-                        <input type="text" id="d_github" name="github" placeholder="github.com/you" value="{{ profile_details.github or '' }}">
+                        <input type="text" id="d_github" name="github" placeholder="github.com/you" value="{{ profile_details.github or '' }}" class="form-control">
                     </div>
                     <div class="form-group">
                         <label for="d_linkedin">LinkedIn</label>
-                        <input type="text" id="d_linkedin" name="linkedin" placeholder="linkedin.com/in/you" value="{{ profile_details.linkedin or '' }}">
+                        <input type="text" id="d_linkedin" name="linkedin" placeholder="linkedin.com/in/you" value="{{ profile_details.linkedin or '' }}" class="form-control">
                     </div>
                 </div>
                 <div class="form-group">
                     <label for="d_other">Other Link <span class="optional-tag">optional</span></label>
-                    <input type="text" id="d_other" name="other" placeholder="portfolio, twitter, etc." value="{{ profile_details.other or '' }}">
+                    <input type="text" id="d_other" name="other" placeholder="portfolio, twitter, etc." value="{{ profile_details.other or '' }}" class="form-control">
                 </div>
                 <div style="display:flex; gap:10px;">
                     <button type="submit" class="submit-btn" style="width:auto; padding:12px 24px;">Save</button>
@@ -115,13 +95,7 @@
     <section class="profile-section">
         <h2 class="profile-section-title">Saved Resumes</h2>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash {{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        
 
         {% if resumes %}
         <div class="resume-list">
@@ -195,7 +169,11 @@
         {% endif %}
     </section>
 
-    <script>
+    
+{% endblock %}
+
+{% block scripts %}
+<script>
     const analysisMarkdownMap = {{ analyses_markdown_map|tojson }};
 
     document.querySelectorAll('.copy-analysis-btn').forEach((btn) => {
@@ -318,5 +296,4 @@
         });
     });
     </script>
-</body>
-</html>
+{% endblock %}

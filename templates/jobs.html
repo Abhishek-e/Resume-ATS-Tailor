@@ -1,33 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Find Jobs - Resumify</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <!-- Navigation Bar -->
-    <nav class="navbar">
-        <div class="nav-left">
-            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
-        </div>
-        <div class="nav-center">
-            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
-            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
-            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
-        </div>
-        <div class="nav-right">
-            {% if session.user_id %}
-                <a href="{{ url_for('profile') }}" style="color: #ffffff; font-size: 14px; margin-right: 10px; text-decoration: none;">{{ session.username }}</a>
-                <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
-            {% else %}
-                <a href="{{ url_for('login') }}" class="nav-btn-login">Log In</a>
-                <a href="{{ url_for('register') }}" class="nav-btn-primary">Get Started</a>
-            {% endif %}
-        </div>
-    </nav>
+{% extends "base.html" %}
+{% set active_page = "jobs" %}
+{% block title %}Find Jobs - Resumify{% endblock %}
 
+{% block content %}
     <!-- Jobs Hero -->
     <section class="jobs-hero">
         <h1>Find your next role</h1>
@@ -40,17 +15,17 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="job_title">Job Title / Role *</label>
-                    <input type="text" id="job_title" name="job_title" placeholder="e.g. Frontend Developer" required>
+                    <input type="text" id="job_title" name="job_title" placeholder="e.g. Frontend Developer" required class="form-control">
                 </div>
                 <div class="form-group">
                     <label for="location">Location</label>
-                    <input type="text" id="location" name="location" placeholder="e.g. Remote, Bangalore">
+                    <input type="text" id="location" name="location" placeholder="e.g. Remote, Bangalore" class="form-control">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label for="experience_level">Experience Level</label>
-                    <select id="experience_level" name="experience_level">
+                    <select id="experience_level" name="experience_level" class="form-select">
                         <option value="">Any</option>
                         <option value="Entry-level">Entry-level</option>
                         <option value="Mid-level">Mid-level</option>
@@ -61,7 +36,7 @@
             </div>
             <div class="form-group">
                 <label for="skills">Your Skills / Experience</label>
-                <textarea id="skills" name="skills" rows="3" placeholder="e.g. 3 years React, Node.js, REST APIs, SQL... (used to estimate your match %)"></textarea>
+                <textarea id="skills" name="skills" rows="3" placeholder="e.g. 3 years React, Node.js, REST APIs, SQL... (used to estimate your match %)" class="form-control"></textarea>
             </div>
             <button type="submit" class="submit-btn" id="search-btn">Search Jobs</button>
         </form>
@@ -87,7 +62,11 @@
         </div>
     </div>
 
-    <script>
+    
+{% endblock %}
+
+{% block scripts %}
+<script>
     const form = document.getElementById('job-search-form');
     const statusEl = document.getElementById('jobs-status');
     const resultsEl = document.getElementById('jobs-results');
@@ -230,5 +209,4 @@
         }
     });
     </script>
-</body>
-</html>
+{% endblock %}

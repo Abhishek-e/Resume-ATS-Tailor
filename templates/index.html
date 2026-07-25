@@ -1,43 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resumify - Build Your Career</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <!-- Promotional Banner -->
-    <!--
-    <div class="promo-banner" id="promoBanner">
-        <span class="promo-text">For a limited time, get premium features free. Use code at checkout:</span>
-        <span class="promo-code">RESUMIFY2026</span>
-        <button class="close-btn" onclick="document.getElementById('promoBanner').style.display='none'">×</button>
-    </div>
--->
-    
+{% extends "base.html" %}
+{% block title %}Resumify - Build Your Career{% endblock %}
 
-    <!-- Navigation Bar -->
-    <nav class="navbar">
-        <div class="nav-left">
-            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
-        </div>
-        <div class="nav-center">
-            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
-            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
-            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
-        </div>
-        <div class="nav-right">
-            {% if session.user_id %}
-                <a href="{{ url_for('profile') }}" style="color: #ffffff; font-size: 14px; margin-right: 10px; text-decoration: none;">{{ session.username }}</a>
-                <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
-            {% else %}
-                <a href="{{ url_for('login') }}" class="nav-btn-login">Log In</a>
-                <a href="{{ url_for('register') }}" class="nav-btn-primary">Get Started</a>
-            {% endif %}
-        </div>
-    </nav>
-
+{% block content %}
         <!-- Hero Section -->
     <section class="hero">
         <h1>Create a professional resume in minutes with AI</h1>
@@ -104,5 +68,4 @@
             </a>
         </div>
     </section>
-</body>
-</html>
+{% endblock %}

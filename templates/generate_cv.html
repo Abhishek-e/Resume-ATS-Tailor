@@ -1,27 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generate CV - Resumify</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <nav class="navbar">
-        <div class="nav-left">
-            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
-        </div>
-        <div class="nav-center">
-            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
-            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
-            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
-        </div>
-        <div class="nav-right">
-            <a href="{{ url_for('profile') }}" style="color: #ffffff; font-size: 14px; margin-right: 10px; text-decoration: none;">{{ session.username }}</a>
-            <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
-        </div>
-    </nav>
+{% extends "base.html" %}
+{% set active_page = "generate_cv" %}
+{% block title %}Generate CV - Resumify{% endblock %}
 
+{% block content %}
     <section class="jobs-hero">
         <h1>Generate your CV</h1>
         <p class="subtitle">Tell us about yourself, let AI turn it into a polished, ATS-friendly resume, then pick a template and export it.</p>
@@ -38,61 +19,61 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="full_name">Full Name *</label>
-                    <input type="text" id="full_name" name="full_name" placeholder="e.g. Jordan Lee" required>
+                    <input type="text" id="full_name" name="full_name" placeholder="e.g. Jordan Lee" required class="form-control">
                 </div>
                 <div class="form-group">
                     <label for="target_role">Target Job Title *</label>
-                    <input type="text" id="target_role" name="target_role" placeholder="e.g. Product Designer" required>
+                    <input type="text" id="target_role" name="target_role" placeholder="e.g. Product Designer" required class="form-control">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label for="email">Email</label>
-                    <input type="email" id="email" name="email" placeholder="you@example.com">
+                    <input type="email" id="email" name="email" placeholder="you@example.com" class="form-control">
                 </div>
                 <div class="form-group">
                     <label for="phone">Phone</label>
-                    <input type="text" id="phone" name="phone" placeholder="+1 555 123 4567">
+                    <input type="text" id="phone" name="phone" placeholder="+1 555 123 4567" class="form-control">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label for="location">Location</label>
-                    <input type="text" id="location" name="location" placeholder="City, Country">
+                    <input type="text" id="location" name="location" placeholder="City, Country" class="form-control">
                 </div>
                 <div class="form-group">
                     <label for="linkedin">LinkedIn</label>
-                    <input type="text" id="linkedin" name="linkedin" placeholder="linkedin.com/in/you">
+                    <input type="text" id="linkedin" name="linkedin" placeholder="linkedin.com/in/you" class="form-control">
                 </div>
             </div>
             <div class="form-group">
                 <label for="portfolio">Portfolio / Website</label>
-                <input type="text" id="portfolio" name="portfolio" placeholder="yourwebsite.com">
+                <input type="text" id="portfolio" name="portfolio" placeholder="yourwebsite.com" class="form-control">
             </div>
             <div class="form-group">
                 <label for="summary">Professional Summary <span class="optional-tag">optional — we'll write one if left blank</span></label>
-                <textarea id="summary" name="summary" rows="2" placeholder="A short pitch about yourself..."></textarea>
+                <textarea id="summary" name="summary" rows="2" placeholder="A short pitch about yourself..." class="form-control"></textarea>
             </div>
             <div class="form-group">
                 <label for="skills">Skills</label>
-                <textarea id="skills" name="skills" rows="2" placeholder="e.g. Figma, User Research, Design Systems, HTML/CSS"></textarea>
+                <textarea id="skills" name="skills" rows="2" placeholder="e.g. Figma, User Research, Design Systems, HTML/CSS" class="form-control"></textarea>
             </div>
             <div class="form-group">
                 <label for="experience">Work Experience</label>
-                <textarea id="experience" name="experience" rows="4" placeholder="Company, role, dates, and what you did — one role per line or paragraph. E.g. Acme Inc, Product Designer, 2022-2024: led redesign of checkout flow, ran 20+ user interviews..."></textarea>
+                <textarea id="experience" name="experience" rows="4" placeholder="Company, role, dates, and what you did — one role per line or paragraph. E.g. Acme Inc, Product Designer, 2022-2024: led redesign of checkout flow, ran 20+ user interviews..." class="form-control"></textarea>
             </div>
             <div class="form-group">
                 <label for="education">Education</label>
-                <textarea id="education" name="education" rows="2" placeholder="e.g. B.Des in Industrial Design, State University, 2018-2022"></textarea>
+                <textarea id="education" name="education" rows="2" placeholder="e.g. B.Des in Industrial Design, State University, 2018-2022" class="form-control"></textarea>
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label for="certifications">Certifications <span class="optional-tag">optional</span></label>
-                    <textarea id="certifications" name="certifications" rows="2"></textarea>
+                    <textarea id="certifications" name="certifications" rows="2" class="form-control"></textarea>
                 </div>
                 <div class="form-group">
                     <label for="projects">Projects <span class="optional-tag">optional</span></label>
-                    <textarea id="projects" name="projects" rows="2"></textarea>
+                    <textarea id="projects" name="projects" rows="2" class="form-control"></textarea>
                 </div>
             </div>
             <button type="submit" class="submit-btn" id="generate-btn">Generate Resume</button>
@@ -124,7 +105,7 @@
             <form id="analyze-form" class="jobs-search-form">
                 <div class="form-group">
                     <label for="resume-text">Paste your resume</label>
-                    <textarea id="resume-text" name="resume_text" rows="10" placeholder="Paste your current resume text..."></textarea>
+                    <textarea id="resume-text" name="resume_text" rows="10" placeholder="Paste your current resume text..." class="form-control"></textarea>
                 </div>
 
                 <div class="plag-upload-row">
@@ -136,7 +117,7 @@
 
                 <div class="form-group">
                     <label for="jd-text">Target Job Description *</label>
-                    <textarea id="jd-text" name="job_description" rows="8" placeholder="Paste the job description you're targeting..." required></textarea>
+                    <textarea id="jd-text" name="job_description" rows="8" placeholder="Paste the job description you're targeting..." required class="form-control"></textarea>
                 </div>
 
                 <button type="submit" class="submit-btn" id="analyze-btn">Analyze &amp; Tailor My Resume</button>
@@ -212,7 +193,11 @@
         </div>
     </section>
 
-    <script>
+    
+{% endblock %}
+
+{% block scripts %}
+<script>
     const form = document.getElementById('cv-form');
     const generateBtn = document.getElementById('generate-btn');
     const statusEl = document.getElementById('cv-status');
@@ -373,7 +358,7 @@
                 saveStatus.textContent = data.error || 'Failed to save.';
                 return;
             }
-            saveStatus.innerHTML = 'Saved! <a href="{{ url_for("profile") }}" style="color:#fff; text-decoration:underline;">View in your profile &rarr;</a>';
+            saveStatus.innerHTML = 'Saved! <a href="{{ url_for("profile") }}" style="color:var(--tblr-primary); text-decoration:underline;">View in your profile &rarr;</a>';
         } catch (err) {
             saveStatus.textContent = 'Network error while saving.';
         } finally {
@@ -626,7 +611,7 @@
                 analyzeSaveStatus.textContent = data.error || 'Failed to save.';
                 return;
             }
-            analyzeSaveStatus.innerHTML = 'Saved! <a href="{{ url_for("profile") }}" style="color:#fff; text-decoration:underline;">View in your profile &rarr;</a>';
+            analyzeSaveStatus.innerHTML = 'Saved! <a href="{{ url_for("profile") }}" style="color:var(--tblr-primary); text-decoration:underline;">View in your profile &rarr;</a>';
         } catch (err) {
             analyzeSaveStatus.textContent = 'Network error while saving.';
         } finally {
@@ -635,5 +620,4 @@
         }
     });
     </script>
-</body>
-</html>
+{% endblock %}

@@ -1,27 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generate Cover Letter - Resumify</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <nav class="navbar">
-        <div class="nav-left">
-            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
-        </div>
-        <div class="nav-center">
-            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
-            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
-            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
-        </div>
-        <div class="nav-right">
-            <a href="{{ url_for('profile') }}" style="color: #ffffff; font-size: 14px; margin-right: 10px; text-decoration: none;">{{ session.username }}</a>
-            <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
-        </div>
-    </nav>
+{% extends "base.html" %}
+{% set active_page = "cover_letter" %}
+{% block title %}Generate Cover Letter - Resumify{% endblock %}
 
+{% block content %}
     <section class="jobs-hero">
         <h1>Generate your cover letter</h1>
         <p class="subtitle">Tell us about the role and yourself, let AI write a tailored, ATS-friendly cover letter, then pick a style and export it.</p>
@@ -32,54 +13,54 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="full_name">Full Name *</label>
-                    <input type="text" id="full_name" name="full_name" placeholder="e.g. Jordan Lee" required>
+                    <input type="text" id="full_name" name="full_name" placeholder="e.g. Jordan Lee" required class="form-control">
                 </div>
                 <div class="form-group">
                     <label for="target_role">Target Job Title *</label>
-                    <input type="text" id="target_role" name="target_role" placeholder="e.g. Product Designer" required>
+                    <input type="text" id="target_role" name="target_role" placeholder="e.g. Product Designer" required class="form-control">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label for="company_name">Company Name *</label>
-                    <input type="text" id="company_name" name="company_name" placeholder="e.g. Acme Inc" required>
+                    <input type="text" id="company_name" name="company_name" placeholder="e.g. Acme Inc" required class="form-control">
                 </div>
                 <div class="form-group">
                     <label for="hiring_manager">Hiring Manager Name <span class="optional-tag">optional</span></label>
-                    <input type="text" id="hiring_manager" name="hiring_manager" placeholder="e.g. Sam Rivera">
+                    <input type="text" id="hiring_manager" name="hiring_manager" placeholder="e.g. Sam Rivera" class="form-control">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label for="email">Email</label>
-                    <input type="email" id="email" name="email" placeholder="you@example.com">
+                    <input type="email" id="email" name="email" placeholder="you@example.com" class="form-control">
                 </div>
                 <div class="form-group">
                     <label for="phone">Phone</label>
-                    <input type="text" id="phone" name="phone" placeholder="+1 555 123 4567">
+                    <input type="text" id="phone" name="phone" placeholder="+1 555 123 4567" class="form-control">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label for="location">Location</label>
-                    <input type="text" id="location" name="location" placeholder="City, Country">
+                    <input type="text" id="location" name="location" placeholder="City, Country" class="form-control">
                 </div>
                 <div class="form-group">
                     <label for="linkedin">LinkedIn</label>
-                    <input type="text" id="linkedin" name="linkedin" placeholder="linkedin.com/in/you">
+                    <input type="text" id="linkedin" name="linkedin" placeholder="linkedin.com/in/you" class="form-control">
                 </div>
             </div>
             <div class="form-group">
                 <label for="portfolio">Portfolio / Website</label>
-                <input type="text" id="portfolio" name="portfolio" placeholder="yourwebsite.com">
+                <input type="text" id="portfolio" name="portfolio" placeholder="yourwebsite.com" class="form-control">
             </div>
             <div class="form-group">
                 <label for="job_description">Job Description / Key Requirements <span class="optional-tag">optional, helps tailor the letter</span></label>
-                <textarea id="job_description" name="job_description" rows="3" placeholder="Paste key requirements from the job posting..."></textarea>
+                <textarea id="job_description" name="job_description" rows="3" placeholder="Paste key requirements from the job posting..." class="form-control"></textarea>
             </div>
             <div class="form-group">
                 <label for="background">Your Background / Key Achievements</label>
-                <textarea id="background" name="background" rows="4" placeholder="e.g. 5 years in product design, led a redesign that increased conversion by 20%, strong background in Figma and user research..."></textarea>
+                <textarea id="background" name="background" rows="4" placeholder="e.g. 5 years in product design, led a redesign that increased conversion by 20%, strong background in Figma and user research..." class="form-control"></textarea>
             </div>
             <button type="submit" class="submit-btn" id="generate-btn">Generate Cover Letter</button>
         </form>
@@ -106,7 +87,11 @@
         </div>
     </section>
 
-    <script>
+    
+{% endblock %}
+
+{% block scripts %}
+<script>
     const form = document.getElementById('cl-form');
     const generateBtn = document.getElementById('generate-btn');
     const statusEl = document.getElementById('cl-status');
@@ -265,7 +250,7 @@
                 saveStatus.textContent = data.error || 'Failed to save.';
                 return;
             }
-            saveStatus.innerHTML = 'Saved! <a href="{{ url_for("profile") }}" style="color:#fff; text-decoration:underline;">View in your profile &rarr;</a>';
+            saveStatus.innerHTML = 'Saved! <a href="{{ url_for("profile") }}" style="color:var(--tblr-primary); text-decoration:underline;">View in your profile &rarr;</a>';
         } catch (err) {
             saveStatus.textContent = 'Network error while saving.';
         } finally {
@@ -274,5 +259,4 @@
         }
     });
     </script>
-</body>
-</html>
+{% endblock %}
