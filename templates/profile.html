@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - Resumify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
+        </div>
+        <div class="nav-center">
+            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
+        </div>
+        <div class="nav-right">
+            <a href="{{ url_for('profile') }}" class="nav-btn-login">{{ session.username }}</a>
+            <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
+        </div>
+    </nav>
+
+    <section class="jobs-hero">
+        <h1>Your Profile</h1>
+        <p class="subtitle">Signed in as <strong>{{ session.username }}</strong></p>
+    </section>
+
+    <section class="profile-section">
+        <div class="details-header" id="details-toggle">
+            <h2 class="profile-section-title" style="margin-bottom:0;">Profile Details</h2>
+            <span class="details-chevron" id="details-chevron">⌄</span>
+        </div>
+
+        <div class="details-body" id="details-body">
+            <div id="details-view" style="{% if not profile_details %}display:none;{% endif %}">
+                <div class="details-grid">
+                    <div>
+                        <span class="details-label">Full Name</span>
+                        <div class="details-value" id="view-full_name">{{ profile_details.full_name or '—' }}</div>
+                    </div>
+                    <div>
+                        <span class="details-label">ID Card Number</span>
+                        <div class="details-value" id="view-id_card_number">{{ profile_details.id_card_number or '—' }}</div>
+                    </div>
+                    <div>
+                        <span class="details-label">College Name</span>
+                        <div class="details-value" id="view-college_name">{{ profile_details.college_name or '—' }}</div>
+                    </div>
+                    <div>
+                        <span class="details-label">Location</span>
+                        <div class="details-value" id="view-location">{{ profile_details.location or '—' }}</div>
+                    </div>
+                    <div>
+                        <span class="details-label">GitHub</span>
+                        <div class="details-value" id="view-github">{{ profile_details.github or '—' }}</div>
+                    </div>
+                    <div>
+                        <span class="details-label">LinkedIn</span>
+                        <div class="details-value" id="view-linkedin">{{ profile_details.linkedin or '—' }}</div>
+                    </div>
+                    <div>
+                        <span class="details-label">Other Link</span>
+                        <div class="details-value" id="view-other">{{ profile_details.other or '—' }}</div>
+                    </div>
+                </div>
+                <button type="button" class="resume-btn" id="edit-details-btn" style="margin-top:16px;">Edit</button>
+            </div>
+
+            <form id="details-form" class="jobs-search-form" style="{% if profile_details %}display:none;{% endif %} margin-top:0;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="d_full_name">Full Name</label>
+                        <input type="text" id="d_full_name" name="full_name" value="{{ profile_details.full_name or '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="d_id_card_number">ID Card Number</label>
+                        <input type="text" id="d_id_card_number" name="id_card_number" value="{{ profile_details.id_card_number or '' }}">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="d_college_name">College Name</label>
+                        <input type="text" id="d_college_name" name="college_name" value="{{ profile_details.college_name or '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="d_location">Location</label>
+                        <input type="text" id="d_location" name="location" value="{{ profile_details.location or '' }}">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="d_github">GitHub</label>
+                        <input type="text" id="d_github" name="github" placeholder="github.com/you" value="{{ profile_details.github or '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="d_linkedin">LinkedIn</label>
+                        <input type="text" id="d_linkedin" name="linkedin" placeholder="linkedin.com/in/you" value="{{ profile_details.linkedin or '' }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="d_other">Other Link <span class="optional-tag">optional</span></label>
+                    <input type="text" id="d_other" name="other" placeholder="portfolio, twitter, etc." value="{{ profile_details.other or '' }}">
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button type="submit" class="submit-btn" style="width:auto; padding:12px 24px;">Save</button>
+                    <button type="button" class="resume-btn" id="cancel-details-btn" style="{% if not profile_details %}display:none;{% endif %}">Cancel</button>
+                </div>
+            </form>
+            <div id="details-status" class="jobs-status" style="display:none;"></div>
+        </div>
+    </section>
+
+    <section class="profile-section">
+        <h2 class="profile-section-title">Saved Resumes</h2>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% if resumes %}
+        <div class="resume-list">
+            {% for r in resumes %}
+            <div class="resume-row">
+                <div class="resume-info">
+                    <div class="resume-name">{{ r.full_name or 'Untitled resume' }}</div>
+                    <div class="resume-meta">{{ r.target_role or '' }}{% if r.target_role %} &middot; {% endif %}<span class="resume-template-badge">{{ r.template|capitalize }}</span> &middot; {{ r.created_at.strftime('%d %b %Y') }}</div>
+                </div>
+                <div class="resume-actions">
+                    <a href="{{ url_for('resume_download_pdf', resume_id=r.id) }}" class="resume-btn">Download PDF</a>
+                    <a href="{{ url_for('resume_download_docx', resume_id=r.id) }}" class="resume-btn">Download Word</a>
+                    <button type="button" class="delete-icon-btn" data-type="resume" data-id="{{ r.id }}" title="Delete">&times;</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="jobs-empty">No resumes saved yet. <a href="{{ url_for('generate_cv') }}">Generate your first CV</a>.</p>
+        {% endif %}
+    </section>
+
+    <section class="profile-section">
+        <h2 class="profile-section-title">Saved Cover Letters</h2>
+
+        {% if cover_letters %}
+        <div class="resume-list">
+            {% for c in cover_letters %}
+            <div class="resume-row">
+                <div class="resume-info">
+                    <div class="resume-name">{{ c.full_name or 'Untitled cover letter' }}</div>
+                    <div class="resume-meta">{{ c.target_role or '' }}{% if c.target_role and c.company_name %} at {% endif %}{{ c.company_name or '' }}{% if c.target_role or c.company_name %} &middot; {% endif %}<span class="resume-template-badge">{{ c.template|capitalize }}</span> &middot; {{ c.created_at.strftime('%d %b %Y') }}</div>
+                </div>
+                <div class="resume-actions">
+                    <a href="{{ url_for('cover_letter_download_pdf', letter_id=c.id) }}" class="resume-btn">Download PDF</a>
+                    <a href="{{ url_for('cover_letter_download_docx', letter_id=c.id) }}" class="resume-btn">Download Word</a>
+                    <button type="button" class="delete-icon-btn" data-type="cover-letter" data-id="{{ c.id }}" title="Delete">&times;</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="jobs-empty">No cover letters saved yet. <a href="{{ url_for('generate_cover_letter') }}">Generate your first cover letter</a>.</p>
+        {% endif %}
+    </section>
+
+    <script>
+    const detailsToggle = document.getElementById('details-toggle');
+    const detailsBody = document.getElementById('details-body');
+    const detailsChevron = document.getElementById('details-chevron');
+    const detailsView = document.getElementById('details-view');
+    const detailsForm = document.getElementById('details-form');
+    const editDetailsBtn = document.getElementById('edit-details-btn');
+    const cancelDetailsBtn = document.getElementById('cancel-details-btn');
+    const detailsStatus = document.getElementById('details-status');
+
+    detailsToggle.addEventListener('click', () => {
+        detailsBody.classList.toggle('collapsed');
+        detailsChevron.classList.toggle('rotated');
+    });
+
+    if (editDetailsBtn) {
+        editDetailsBtn.addEventListener('click', () => {
+            detailsView.style.display = 'none';
+            detailsForm.style.display = 'block';
+            cancelDetailsBtn.style.display = 'inline-block';
+        });
+    }
+
+    if (cancelDetailsBtn) {
+        cancelDetailsBtn.addEventListener('click', () => {
+            detailsForm.style.display = 'none';
+            detailsView.style.display = 'block';
+        });
+    }
+
+    detailsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = detailsForm.querySelector('button[type="submit"]');
+        if (submitBtn.disabled) return;
+        submitBtn.disabled = true;
+        detailsStatus.style.display = 'block';
+        detailsStatus.textContent = 'Saving...';
+
+        const payload = {
+            full_name: document.getElementById('d_full_name').value.trim(),
+            id_card_number: document.getElementById('d_id_card_number').value.trim(),
+            college_name: document.getElementById('d_college_name').value.trim(),
+            location: document.getElementById('d_location').value.trim(),
+            github: document.getElementById('d_github').value.trim(),
+            linkedin: document.getElementById('d_linkedin').value.trim(),
+            other: document.getElementById('d_other').value.trim(),
+        };
+
+        try {
+            const res = await fetch("{{ url_for('profile_details_save') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                detailsStatus.textContent = data.error || 'Failed to save.';
+                return;
+            }
+
+            document.getElementById('view-full_name').textContent = payload.full_name || '—';
+            document.getElementById('view-id_card_number').textContent = payload.id_card_number || '—';
+            document.getElementById('view-college_name').textContent = payload.college_name || '—';
+            document.getElementById('view-location').textContent = payload.location || '—';
+            document.getElementById('view-github').textContent = payload.github || '—';
+            document.getElementById('view-linkedin').textContent = payload.linkedin || '—';
+            document.getElementById('view-other').textContent = payload.other || '—';
+
+            detailsForm.style.display = 'none';
+            detailsView.style.display = 'block';
+            detailsStatus.style.display = 'none';
+        } catch (err) {
+            detailsStatus.textContent = 'Network error while saving.';
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+
+    document.querySelectorAll('.delete-icon-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            if (btn.disabled) return;
+            const type = btn.dataset.type;
+            const id = btn.dataset.id;
+            const label = type === 'resume' ? 'resume' : 'cover letter';
+            if (!confirm(`Delete this saved ${label}? This can't be undone.`)) return;
+
+            btn.disabled = true;
+            const url = type === 'resume' ? `/resume/${id}/delete` : `/cover-letter/${id}/delete`;
+            try {
+                const res = await fetch(url, { method: 'POST' });
+                if (res.ok) {
+                    btn.closest('.resume-row').remove();
+                } else {
+                    alert('Failed to delete. Please try again.');
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                alert('Network error while deleting.');
+                btn.disabled = false;
+            }
+        });
+    });
+    </script>
+</body>
+</html>

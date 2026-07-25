@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resumify - Build Your Career</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Promotional Banner -->
+    <!--
+    <div class="promo-banner" id="promoBanner">
+        <span class="promo-text">For a limited time, get premium features free. Use code at checkout:</span>
+        <span class="promo-code">RESUMIFY2026</span>
+        <button class="close-btn" onclick="document.getElementById('promoBanner').style.display='none'">×</button>
+    </div>
+-->
+    
+
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="{{ url_for('home') }}" class="nav-logo">RESUMIFY</a>
+        </div>
+        <div class="nav-center">
+            <a href="#" class="nav-link">Features <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Templates <span class="chevron">⌄</span></a>
+            <a href="#" class="nav-link">Resources <span class="chevron">⌄</span></a>
+        </div>
+        <div class="nav-right">
+            {% if session.user_id %}
+                <a href="{{ url_for('profile') }}" style="color: #ffffff; font-size: 14px; margin-right: 10px; text-decoration: none;">{{ session.username }}</a>
+                <a href="{{ url_for('logout') }}" class="nav-btn-login">Logout</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="nav-btn-login">Log In</a>
+                <a href="{{ url_for('register') }}" class="nav-btn-primary">Get Started</a>
+            {% endif %}
+        </div>
+    </nav>
+
+        <!-- Hero Section -->
+    <section class="hero">
+        <h1>Create a professional resume in minutes with AI</h1>
+        <p class="subtitle">Build a beautiful resume, find your dream job, and grow your career—all in one place.</p>
+        
+        <!-- Check if user is logged in -->
+        {% if session.user_id %}
+            <div class="welcome-message">
+                Welcome back, <strong>{{ session.username }}</strong>
+            </div>
+            
+        {% else %}
+            <a href="{{ url_for('register') }}" class="cta-button">Get Started</a>
+            <p class="cta-subtext">Start for free.</p>
+        {% endif %}
+    </section>
+
+        <!-- Cards Section -->
+    <section class="cards-section">
+        <div class="cards-container">
+            <!-- Card 1: Generate CV -->
+            <a href="{{ url_for('generate_cv') }}" class="card">
+                <img src="https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&w=800&q=80" alt="Generate CV">
+                <div class="card-content">
+                    <h2>Generate CV</h2>
+                    <p>Create professional, ATS-friendly resumes in minutes with our AI-powered builder. Stand out from the crowd.</p>
+                </div>
+            </a>
+
+            <!-- Card 2: Find Jobs -->
+            <a href="{{ url_for('jobs') }}" class="card">
+                <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80" alt="Find Jobs">
+                <div class="card-content">
+                    <h2>Find Jobs</h2>
+                    <p>Discover thousands of job opportunities tailored to your skills and preferences. Land your dream career.</p>
+                </div>
+            </a>
+
+            <!-- Card 3: Generate Cover Letter -->
+            <a href="{{ url_for('generate_cover_letter') }}" class="card">
+                <img src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=800&q=80" alt="Generate Cover Letter">
+                <div class="card-content">
+                    <h2>Generate Cover Letter</h2>
+                    <p>Write a tailored, ATS-friendly cover letter in seconds. Pick a style and export it instantly.</p>
+                </div>
+            </a>
+
+            <!-- Card 4: Plagiarism Checker -->
+            <a href="{{ url_for('plagiarism_checker') }}" class="card">
+                <img src="https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=800&q=80" alt="Plagiarism Checker">
+                <div class="card-content">
+                    <h2>Plagiarism Checker</h2>
+                    <p>Check any text for originality, free for everyone, no account required. Download a full report as a PDF.</p>
+                </div>
+            </a>
+        </div>
+    </section>
+</body>
+</html>
