@@ -244,27 +244,56 @@ body {
 }
 
 .cards-container {
-    display: flex;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 30px;
-    flex-wrap: wrap;
 }
 
 .card {
+    position: relative;
     background-color: #ffffff;
-    width: 400px;
     padding: 0;
-    border-radius: 8px;
+    border-radius: 16px;
     overflow: hidden;
-    transition: all 0.3s ease;
     cursor: pointer;
     text-decoration: none;
     color: #000000;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    transform: translateY(0) scale(1);
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.4s ease;
+    --accent: #4f8fff;
 }
 
+.card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.card:nth-child(1) { --accent: #4f8fff; }
+.card:nth-child(2) { --accent: #34c77b; }
+.card:nth-child(3) { --accent: #a066ff; }
+.card:nth-child(4) { --accent: #ff6b5f; }
+
 .card:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 20px 40px rgba(255, 255, 255, 0.1);
+    transform: translateY(-14px) scale(1.03);
+    box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
+    z-index: 2;
+}
+
+.card:hover::before {
+    transform: scaleX(1);
 }
 
 .card img {
@@ -272,6 +301,11 @@ body {
     height: 280px;
     object-fit: cover;
     display: block;
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.card:hover img {
+    transform: scale(1.08);
 }
 
 .card-content {
@@ -283,6 +317,11 @@ body {
     font-weight: 700;
     margin-bottom: 12px;
     letter-spacing: -0.5px;
+    transition: color 0.3s ease;
+}
+
+.card:hover h2 {
+    color: var(--accent);
 }
 
 .card p {
@@ -1144,11 +1183,14 @@ body {
         padding: 15px 20px;
     }
     
-    .card {
-        width: 100%;
-        max-width: 400px;
+    .cards-container {
+        grid-template-columns: 1fr;
     }
-    
+
+    .card:hover {
+        transform: translateY(-8px) scale(1.01);
+    }
+
     .form-container h2 {
         font-size: 36px;
     }
