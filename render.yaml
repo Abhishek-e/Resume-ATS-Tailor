@@ -4,7 +4,7 @@ services:
     runtime: python
 
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --timeout 120
 
     envVars:
       - key: FIREBASE_CREDENTIALS_JSON
@@ -14,4 +14,8 @@ services:
       - key: FLASK_DEBUG
         value: "false"
       - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
         sync: false
