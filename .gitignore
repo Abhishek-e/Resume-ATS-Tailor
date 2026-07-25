@@ -1,0 +1,13 @@
+# Secrets and environment files
+serviceAccountKey.json
+.env
+.env.*
+# Local and OS files
+.DS_Store
+# Editor & tool configs
+.claude/
+# Virtual envs
+venv/
+env/
+# Dashboard folder
+flask-dashboard-volt/
