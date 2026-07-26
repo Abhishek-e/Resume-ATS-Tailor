@@ -1,0 +1,96 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_analytics" %}
+{% block title %}Analytics{% endblock %}
+{% block page_title %}Analytics{% endblock %}
+{% block page_sub %}Totals, breakdowns and averages across accounts and job posts.{% endblock %}
+
+{% macro bars(rows, total) %}
+    {% if rows %}
+        <div class="bar-chart" role="table">
+            {% for row in rows %}
+                <div class="bar-row" role="row">
+                    <div class="bar-name" role="cell" title="{{ row.label }}">{{ row.label }}</div>
+                    <div class="bar-track" role="cell">
+                        <div class="bar-fill"
+                             style="width: {{ (row.count / total * 100) | round(1) if total else 0 }}%;"></div>
+                    </div>
+                    <div class="bar-value" role="cell">{{ row.count }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-secondary mb-0">Nothing recorded yet.</p>
+    {% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="row row-cards mb-3">
+    {% set tiles = [
+        ('Registered users', analytics.users_total),
+        ('Jobs posted', analytics.posts_total),
+        ('Announcements', analytics.announcements_total),
+        ('Companies', analytics.companies_total),
+        ('Avg signups / active day', analytics.avg_signups_per_day),
+        ('Avg posts / company', analytics.avg_posts_per_company),
+    ] %}
+    {% for label, value in tiles %}
+        <div class="col-6 col-lg-2">
+            <div class="card">
+                <div class="card-body stat-tile">
+                    <div class="stat-label">{{ label }}</div>
+                    <div class="stat-value">{{ value }}</div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<div class="row row-cards">
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><h3 class="card-title">Job categories</h3></div>
+            <div class="card-body">{{ bars(analytics.by_category, analytics.posts_total) }}</div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><h3 class="card-title">Employment type</h3></div>
+            <div class="card-body">{{ bars(analytics.by_type, analytics.posts_total) }}</div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><h3 class="card-title">Top employers</h3></div>
+            <div class="card-body">{{ bars(analytics.by_company, analytics.posts_total) }}</div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><h3 class="card-title">Registrations by day</h3></div>
+            <div class="card-body">
+                {% if analytics.timeline %}
+                    <div class="table-responsive">
+                        <table class="table table-vcenter card-table">
+                            <thead><tr><th>Date</th><th>New</th><th>Running total</th></tr></thead>
+                            <tbody>
+                            {% for point in analytics.timeline | reverse %}
+                                <tr>
+                                    <td>{{ point.date }}</td>
+                                    <td>{{ point.new }}</td>
+                                    <td class="text-secondary">{{ point.total }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-secondary mb-0">No dated registrations yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_profile" %}
+{% block title %}Profile{% endblock %}
+{% block page_title %}Admin profile{% endblock %}
+{% block page_sub %}Change the address and password used to reach this panel.{% endblock %}
+
+{% block content %}
+<div class="row row-cards">
+    <div class="col-12 col-lg-7">
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Credentials</h3></div>
+            <form method="POST" class="card-body" autocomplete="off">
+                <div class="mb-3">
+                    <label class="form-label" for="ad-email">Admin email</label>
+                    <input type="email" id="ad-email" name="email" class="form-control"
+                           value="{{ admin.email if admin else '' }}">
+                    <div class="form-hint">This is the address you sign in with.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="ad-new">New password</label>
+                    <input type="password" id="ad-new" name="new_password" class="form-control"
+                           minlength="6" placeholder="Leave blank to keep the current one">
+                </div>
+
+                <hr>
+
+                <div class="mb-3">
+                    <label class="form-label required" for="ad-current">Current password</label>
+                    <input type="password" id="ad-current" name="current_password"
+                           class="form-control" required>
+                    <div class="form-hint">
+                        Required for either change — an unattended session should not be enough
+                        to take this account over.
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save changes</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Access</h3></div>
+            <div class="card-body">
+                <p class="text-secondary">
+                    The panel lives at <code>/admin</code> and is not linked from anywhere on the
+                    public site. That keeps it out of sight, but it is not what protects it —
+                    the sign-in is. Anyone who guesses the URL still meets the login screen.
+                </p>
+                <p class="text-secondary mb-0">
+                    The seeded password is six identical characters. Change it here before this
+                    site is public.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

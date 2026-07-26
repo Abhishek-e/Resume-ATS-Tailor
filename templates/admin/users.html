@@ -1,0 +1,92 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_users" %}
+{% block title %}Registered users{% endblock %}
+{% block page_title %}Registered users{% endblock %}
+{% block page_sub %}{{ users|length }} account{{ '' if users|length == 1 else 's' }}.{% endblock %}
+
+{% block content %}
+<div class="card">
+    {% if users %}
+        <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Joined</th>
+                        <th>Profile</th>
+                        <th class="w-1">Credentials</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for user in users %}
+                    <tr>
+                        <td>{{ user.username or '—' }}</td>
+                        <td class="text-secondary">{{ user.email }}</td>
+                        <td class="text-secondary">{{ user.created_at | admin_date }}</td>
+                        <td>
+                            {% if user.has_details %}
+                                <span class="badge bg-green-lt">completed</span>
+                            {% else %}
+                                <span class="badge bg-secondary-lt">empty</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-ghost-secondary"
+                                    data-bs-toggle="modal" data-bs-target="#u{{ loop.index }}">
+                                Reset
+                            </button>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="card-body text-secondary">No accounts registered yet.</div>
+    {% endif %}
+</div>
+
+{% for user in users %}
+    <div class="modal modal-blur fade" id="u{{ loop.index }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ user.username or user.email }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-secondary">
+                        Existing passwords are stored hashed and cannot be read back — the only
+                        thing available is to set a new one and pass it on.
+                    </p>
+
+                    <form method="POST" action="{{ url_for('admin_users_reset', email=user.email) }}"
+                          class="mb-4">
+                        <label class="form-label" for="pw{{ loop.index }}">New password</label>
+                        <div class="input-group">
+                            <input type="text" id="pw{{ loop.index }}" name="new_password"
+                                   class="form-control" minlength="6" required
+                                   placeholder="At least 6 characters">
+                            <button type="submit" class="btn btn-primary">Reset password</button>
+                        </div>
+                    </form>
+
+                    <form method="POST" action="{{ url_for('admin_users_email', email=user.email) }}">
+                        <label class="form-label" for="em{{ loop.index }}">Change email</label>
+                        <div class="input-group">
+                            <input type="email" id="em{{ loop.index }}" name="new_email"
+                                   class="form-control" value="{{ user.email }}" required>
+                            <button type="submit" class="btn btn-ghost-secondary">Update email</button>
+                        </div>
+                        <div class="form-hint">
+                            Accounts are keyed by email, so this rewrites the record under the new
+                            address and removes the old one. Their saved work moves with it.
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endfor %}
+{% endblock %}

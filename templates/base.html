@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Resumify{% endblock %}</title>
+    <title>{% block title %}{{ site.app_name }}{% endblock %}</title>
     <!-- Applied before the stylesheets paint so a dark-mode user never sees a
          white flash. Tabler keys its whole palette off data-bs-theme on :root. -->
     <script>
@@ -17,6 +17,13 @@
         })();
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/tabler/css/tabler.min.css') }}">
+    <!-- Script accent for hero headings. Body text stays on the local Geist
+         faces, so a blocked or slow Google Fonts only costs the accent, never
+         readability. display=swap keeps the fallback painted meanwhile. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -28,7 +35,7 @@
             </button>
 
             <h1 class="navbar-brand navbar-brand-autodark pe-0 pe-md-3">
-                <a href="{{ url_for('home') }}">RESUMIFY</a>
+                <a href="{{ url_for('home') }}">{{ site.app_name|upper }}</a>
             </h1>
 
             <div class="navbar-nav flex-row order-md-last align-items-center">
@@ -51,6 +58,23 @@
                 </button>
 
                 {% if session.user_id %}
+                    {% if pending_announcements %}
+                        <button type="button"
+                                class="btn btn-icon btn-ghost-secondary ann-bell me-1"
+                                data-bs-toggle="modal" data-bs-target="#announcement-modal"
+                                aria-label="{{ pending_announcements|length }} new announcement{{ '' if pending_announcements|length == 1 else 's' }}"
+                                title="New announcement">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24"
+                                 viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"
+                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                                <path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6"/>
+                                <path d="M9 17v1a3 3 0 0 0 6 0v-1"/>
+                            </svg>
+                            <span class="ann-bell-dot"></span>
+                        </button>
+                    {% endif %}
+
                     <div class="nav-item dropdown">
                         <a href="#" class="nav-link d-flex lh-1 p-0 px-2" data-bs-toggle="dropdown">
                             <span class="avatar avatar-sm">{{ session.username[:2]|upper }}</span>
@@ -132,13 +156,53 @@
                         </ul>
                     </div>
                     <div class="col-12 col-lg-auto mt-3 mt-lg-0">
-                        <span class="text-secondary">Resumify &mdash; build your career with AI.</span>
+                        <span class="text-secondary">{{ site.app_name }} &mdash; {{ site.footer_signature }}</span>
                     </div>
                 </div>
             </div>
         </footer>
     </div>
 </div>
+
+{% if pending_announcements %}
+    {# Opens by itself on the first page load after an announcement lands, and
+       stays reachable from the bell until dismissed. Dismissal is recorded on
+       the user, so it does not come back on their next sign-in. #}
+    <div class="modal modal-blur fade" id="announcement-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        {% if pending_announcements|length == 1 %}
+                            Announcement
+                        {% else %}
+                            {{ pending_announcements|length }} announcements
+                        {% endif %}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% for ann in pending_announcements %}
+                        <div class="ann-item">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge bg-{{ 'green' if ann.level == 'success' else 'yellow' if ann.level == 'warning' else 'blue' }}-lt">
+                                    {{ ann.level }}
+                                </span>
+                                <strong>{{ ann.title }}</strong>
+                            </div>
+                            <p class="ann-body text-secondary mb-0">{{ ann.body }}</p>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="ann-dismiss" data-bs-dismiss="modal">
+                        Got it
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
 
 <script src="{{ url_for('static', filename='vendor/tabler/js/tabler.min.js') }}" defer></script>
 <script>
@@ -163,6 +227,31 @@
 
         label();
     })();
+
+    // Announcements.
+    //
+    // The vendored Tabler bundle wires data-bs-toggle itself but never
+    // publishes window.bootstrap, so `new bootstrap.Modal()` is not available
+    // here at any point in the page lifecycle. Both things below work around
+    // that without needing the global: the popup is opened by clicking the
+    // bell, which already carries data-bs-toggle, and the dismissal hook
+    // listens for the DOM event Bootstrap dispatches either way.
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('announcement-modal');
+        if (!modalEl) { return; }
+
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            fetch('{{ url_for('announcements_seen') }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            }).catch(function () { /* dismissal is best-effort */ });
+        }, { once: true });
+
+        // Surface it once, unprompted, on the first load after it is published.
+        var bell = document.querySelector('.ann-bell');
+        if (bell) { bell.click(); }
+    });
 </script>
 {% block scripts %}{% endblock %}
 </body>

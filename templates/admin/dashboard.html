@@ -1,0 +1,272 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_dashboard" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_sub %}Participation over time, and what has been posted.{% endblock %}
+
+{% block page_actions %}
+<div class="btn-list">
+    <a href="{{ url_for('admin_jobs') }}" class="btn btn-primary">Post a job</a>
+    <a href="{{ url_for('admin_announcements') }}" class="btn btn-ghost-secondary">Announce</a>
+</div>
+{% endblock %}
+
+{% macro bars(rows, total) %}
+    {% if rows %}
+        <div class="bar-chart" role="table">
+            {% for row in rows[:8] %}
+                <div class="bar-row" role="row">
+                    <div class="bar-name" role="cell" title="{{ row.label }}">{{ row.label }}</div>
+                    <div class="bar-track" role="cell">
+                        <div class="bar-fill"
+                             style="width: {{ (row.count / total * 100) | round(1) if total else 0 }}%;"></div>
+                    </div>
+                    <div class="bar-value" role="cell">{{ row.count }}</div>
+                </div>
+            {% endfor %}
+            {% if rows|length > 8 %}
+                <div class="bar-more">+{{ rows|length - 8 }} more</div>
+            {% endif %}
+        </div>
+    {% else %}
+        <p class="text-secondary mb-0">Nothing recorded yet.</p>
+    {% endif %}
+{% endmacro %}
+
+{% block content %}
+    {# Every tile opens a modal. data-bs-toggle is wired by the Tabler bundle
+       itself, so this needs no script of its own. #}
+    <div class="row row-cards mb-3">
+        {% set tiles = [
+            ('users', 'Registered users', analytics.users_total, 'Everyone with an account.'),
+            ('posts', 'Jobs posted', analytics.posts_total, 'Openings published from this panel.'),
+            ('categories', 'Categories used', analytics.categories_used, 'Distinct job categories posted.'),
+            ('companies', 'Companies', analytics.companies_total, 'Distinct employers posted.'),
+            ('avgsignup', 'Avg signups / day', analytics.avg_signups_per_day, 'Across days with at least one signup.'),
+            ('avgposts', 'Avg posts / company', analytics.avg_posts_per_company, 'Job posts divided by companies.'),
+        ] %}
+        {% for key, label, value, hint in tiles %}
+            <div class="col-6 col-lg-2">
+                <button type="button" class="card stat-card w-100 text-start"
+                        data-bs-toggle="modal" data-bs-target="#modal-{{ key }}">
+                    <div class="card-body stat-tile">
+                        <div class="stat-label">{{ label }}</div>
+                        <div class="stat-value">{{ value }}</div>
+                        <div class="stat-hint">{{ hint }}</div>
+                    </div>
+                </button>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="row row-cards">
+        <div class="col-12 col-xl-7">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h3 class="card-title">Participants over time</h3>
+                </div>
+                <div class="card-body">
+                    {% if analytics.timeline %}
+                        {% set points = analytics.timeline %}
+                        {% set peak = points[-1].total %}
+                        {% set step = 100 / (points|length - 1) if points|length > 1 else 0 %}
+                        <div class="timeline-chart">
+                            <svg viewBox="0 0 100 40" preserveAspectRatio="none"
+                                 role="img" aria-label="Cumulative registered users over time">
+                                {# Percentages, so the shape is resolution independent and the
+                                   card can be any width without re-rendering server side. #}
+                                {% set coords = [] %}
+                                {% for p in points %}
+                                    {% set x = (loop.index0 * step) | round(2) %}
+                                    {% set y = (40 - (p.total / peak * 36)) | round(2) if peak else 40 %}
+                                    {% set _ = coords.append(x ~ ',' ~ y) %}
+                                {% endfor %}
+                                <polygon class="timeline-area"
+                                         points="0,40 {{ coords | join(' ') }} 100,40"></polygon>
+                                <polyline class="timeline-line" points="{{ coords | join(' ') }}"></polyline>
+                            </svg>
+                            <div class="timeline-axis">
+                                <span>{{ points[0].date }}</span>
+                                <span>{{ points[-1].date }}</span>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-3 mt-3">
+                            <div><span class="stat-label">Peak total</span>
+                                <div class="fw-bold">{{ peak }}</div></div>
+                            <div><span class="stat-label">Days with signups</span>
+                                <div class="fw-bold">{{ points|length }}</div></div>
+                            <div><span class="stat-label">Best day</span>
+                                <div class="fw-bold">{{ points | map(attribute='new') | max }}</div></div>
+                        </div>
+                    {% else %}
+                        <p class="text-secondary mb-0">
+                            No dated registrations yet — the line appears once accounts start
+                            coming in.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-5">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h3 class="card-title">Categories of jobs posted</h3>
+                </div>
+                <div class="card-body">
+                    {{ bars(analytics.by_category, analytics.posts_total) }}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-6">
+            <div class="card h-100">
+                <div class="card-header"><h3 class="card-title">Employment type</h3></div>
+                <div class="card-body">{{ bars(analytics.by_type, analytics.posts_total) }}</div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-6">
+            <div class="card h-100">
+                <div class="card-header"><h3 class="card-title">Top employers</h3></div>
+                <div class="card-body">{{ bars(analytics.by_company, analytics.posts_total) }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail modals, one per tile -->
+    <div class="modal modal-blur fade" id="modal-users" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Registered users — {{ analytics.users_total }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% if analytics.recent_users %}
+                        <p class="text-secondary">Ten most recent registrations.</p>
+                        <div class="table-responsive">
+                            <table class="table table-vcenter">
+                                <thead><tr><th>Name</th><th>Email</th><th>Joined</th></tr></thead>
+                                <tbody>
+                                {% for user in analytics.recent_users %}
+                                    <tr>
+                                        <td>{{ user.username or '—' }}</td>
+                                        <td class="text-secondary">{{ user.email }}</td>
+                                        <td class="text-secondary">
+                                            {{ user.created_at | admin_date }}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <a href="{{ url_for('admin_users') }}" class="btn btn-primary">Manage all users</a>
+                    {% else %}
+                        <p class="mb-0 text-secondary">No accounts yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-blur fade" id="modal-posts" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Jobs posted — {{ analytics.posts_total }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% if analytics.recent_posts %}
+                        <div class="table-responsive">
+                            <table class="table table-vcenter">
+                                <thead><tr><th>Role</th><th>Company</th><th>Category</th><th>Posted</th></tr></thead>
+                                <tbody>
+                                {% for post in analytics.recent_posts %}
+                                    <tr>
+                                        <td>{{ post.title }}</td>
+                                        <td class="text-secondary">{{ post.company }}</td>
+                                        <td><span class="badge bg-secondary-lt">{{ post.category }}</span></td>
+                                        <td class="text-secondary">{{ post.created_at | admin_date }}</td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <a href="{{ url_for('admin_jobs') }}" class="btn btn-primary">Manage job posts</a>
+                    {% else %}
+                        <p class="mb-0 text-secondary">Nothing posted yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-blur fade" id="modal-categories" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Categories used — {{ analytics.categories_used }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">{{ bars(analytics.by_category, analytics.posts_total) }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-blur fade" id="modal-companies" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Companies — {{ analytics.companies_total }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">{{ bars(analytics.by_company, analytics.posts_total) }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-blur fade" id="modal-avgsignup" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Average signups per day</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-secondary">
+                        {{ analytics.users_total }} registrations spread across
+                        {{ analytics.timeline|length }} day{{ '' if analytics.timeline|length == 1 else 's' }}
+                        that had at least one signup — an average of
+                        <strong>{{ analytics.avg_signups_per_day }}</strong> per active day.
+                    </p>
+                    <p class="text-secondary mb-0">
+                        Quiet days are excluded, so this reads higher than a calendar average
+                        would. It answers "how many arrive when they arrive", not "how many
+                        per day since launch".
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal modal-blur fade" id="modal-avgposts" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Average posts per company</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-secondary">
+                        {{ analytics.posts_total }} posts across
+                        {{ analytics.companies_total }} employers —
+                        <strong>{{ analytics.avg_posts_per_company }}</strong> each.
+                    </p>
+                    {{ bars(analytics.by_company, analytics.posts_total) }}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,112 @@
+{#
+  Admin shell. Deliberately does not extend the public base.html: this layout
+  is a sidebar rather than a top navbar, and none of the public navigation
+  should appear here (nor the admin navigation there - /admin stays unlinked).
+  Theme handling and the Tabler bundle are duplicated from base.html because
+  they are the only two things the two shells share.
+#}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin{% endblock %} &middot; {{ site.app_name }}</title>
+    <meta name="robots" content="noindex, nofollow">
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('resumify-theme');
+                if (saved === 'dark' || saved === 'light') {
+                    document.documentElement.setAttribute('data-bs-theme', saved);
+                }
+            } catch (e) { /* private mode - stay on the default light theme */ }
+        })();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/tabler/css/tabler.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="page">
+    <aside class="navbar navbar-vertical navbar-expand-lg admin-sidebar">
+        <div class="container-fluid">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#admin-menu" aria-label="Toggle admin navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="navbar-brand admin-brand">
+                <a href="{{ url_for('admin_dashboard') }}">{{ site.app_name }}</a>
+                <span class="admin-brand-tag">Admin</span>
+            </div>
+
+            <div class="collapse navbar-collapse" id="admin-menu">
+                <ul class="navbar-nav pt-lg-3">
+                    {% set items = [
+                        ('admin_dashboard', 'Dashboard'),
+                        ('admin_jobs', 'Job posts'),
+                        ('admin_users', 'Registered users'),
+                        ('admin_analytics', 'Analytics'),
+                        ('admin_announcements', 'Announcements'),
+                        ('admin_settings', 'Settings'),
+                        ('admin_profile', 'Profile'),
+                    ] %}
+                    {% for endpoint, label in items %}
+                        <li class="nav-item {% if active_admin == endpoint %}active{% endif %}">
+                            <a class="nav-link" href="{{ url_for(endpoint) }}">
+                                <span class="nav-link-title">{{ label }}</span>
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+
+                <div class="mt-auto pt-3 admin-sidebar-foot">
+                    <div class="text-secondary small text-truncate mb-2">
+                        {{ session.admin_email }}
+                    </div>
+                    <div class="btn-list">
+                        <a href="{{ url_for('home') }}" class="btn btn-sm btn-ghost-secondary">View site</a>
+                        <a href="{{ url_for('admin_logout') }}" class="btn btn-sm btn-ghost-danger">Log out</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <div class="page-wrapper">
+        <div class="page-header d-print-none">
+            <div class="container-xl">
+                <div class="row g-2 align-items-center">
+                    <div class="col">
+                        <h2 class="page-title">{% block page_title %}{% endblock %}</h2>
+                        <div class="text-secondary mt-1">{% block page_sub %}{% endblock %}</div>
+                    </div>
+                    <div class="col-12 col-md-auto ms-md-auto mt-2 mt-md-0">
+                        {% block page_actions %}{% endblock %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-body">
+            <div class="container-xl">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible" role="alert">
+                                <div>{{ message }}</div>
+                                <a class="btn-close" data-bs-dismiss="alert" aria-label="close"></a>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/tabler/js/tabler.min.js') }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1360,3 +1360,316 @@ body {
 }
 
 :root[data-bs-theme="dark"] .prep-gate-card .icon { color: #a78bfa; }
+
+/* --------------------------------------------------------------------------
+   Home hero - split layout
+   Copy on one side, portrait on the other. The caption card overlaps the photo
+   on desktop and sits inside its lower edge on narrow screens, so it never
+   pushes out of the flow or covers the face.
+   -------------------------------------------------------------------------- */
+
+.hero-split {
+    display: flex;
+    align-items: center;
+    gap: clamp(1.5rem, 5vw, 4rem);
+    padding: 3rem 0 2.5rem;
+}
+
+.hero-copy { flex: 1 1 52%; min-width: 0; }
+
+.hero-eyebrow {
+    display: inline-block;
+    margin-bottom: 1rem;
+    padding: .3rem .85rem;
+    border-radius: 999px;
+    background: var(--tblr-primary-lt);
+    color: var(--tblr-primary);
+    font-size: .8125rem;
+    font-weight: 600;
+    letter-spacing: .01em;
+}
+
+.hero-heading {
+    font-size: clamp(2rem, 4.2vw, 3.25rem);
+    font-weight: 700;
+    letter-spacing: -.03em;
+    line-height: 1.12;
+    margin: 0 0 1rem;
+    max-width: 16ch;
+}
+
+/* The accent only. A whole headline set in script costs more readability than
+   it buys, and the fallback stack keeps the shape if the webfont never lands. */
+.hero-script {
+    font-family: 'Dancing Script', 'Snell Roundhand', 'Brush Script MT', cursive;
+    font-weight: 700;
+    font-size: 1.18em;
+    line-height: 1;
+    letter-spacing: 0;
+    color: var(--tblr-primary);
+    padding-right: .06em;   /* script faces overhang their right sidebearing */
+}
+
+.hero-lead {
+    color: var(--tblr-secondary);
+    font-size: 1.05rem;
+    line-height: 1.6;
+    max-width: 46ch;
+    margin: 0;
+}
+
+.hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem;
+    margin-top: 1.75rem;
+}
+
+/* .cta-button carries its own top margin for the old centred hero; inside the
+   flex row that would knock it out of line with the ghost button. */
+.hero-actions .cta-button { margin-top: 0; }
+
+.hero-proof {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.75rem;
+    margin: 2.25rem 0 0;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--tblr-border-color);
+}
+
+.hero-proof div { min-width: 0; }
+
+.hero-proof dt {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.1;
+}
+
+.hero-proof dd {
+    margin: .125rem 0 0;
+    color: var(--tblr-secondary);
+    font-size: .8125rem;
+}
+
+.hero-figure {
+    position: relative;
+    flex: 1 1 44%;
+    margin: 0;
+    min-width: 0;
+}
+
+.hero-figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 30rem;
+    object-fit: cover;
+    object-position: center 22%;
+    border-radius: 1.25rem;
+    box-shadow: var(--rs-shadow-lift, 0 1.5rem 3rem rgba(0, 0, 0, .22));
+}
+
+.hero-figure-caption {
+    position: absolute;
+    left: clamp(.75rem, 4%, 1.5rem);
+    bottom: clamp(.75rem, 4%, 1.5rem);
+    right: clamp(.75rem, 4%, 1.5rem);
+    max-width: 20rem;
+    padding: .9rem 1.1rem;
+    border-radius: .9rem;
+    background: var(--tblr-bg-surface);
+    border: 1px solid var(--tblr-border-color);
+    box-shadow: 0 .75rem 2rem rgba(0, 0, 0, .22);
+}
+
+.hero-figure-caption .hero-script {
+    display: block;
+    font-size: 1.5rem;
+    line-height: 1.15;
+}
+
+.hero-figure-sub {
+    display: block;
+    margin-top: .15rem;
+    color: var(--tblr-secondary);
+    font-size: .875rem;
+    line-height: 1.4;
+}
+
+/* Below the split point the photo leads, then the copy - a face reads faster
+   than a headline on a phone, and the caption stays anchored to the image. */
+@media (max-width: 991.98px) {
+    .hero-split {
+        flex-direction: column-reverse;
+        gap: 2rem;
+        padding-top: 2rem;
+    }
+
+    .hero-copy, .hero-figure { flex: 1 1 auto; width: 100%; }
+    .hero-heading { max-width: none; }
+    .hero-lead { max-width: none; }
+    .hero-figure img { max-height: 20rem; }
+    .hero-figure-caption { max-width: none; }
+}
+
+@media (max-width: 575.98px) {
+    .hero-proof { gap: 1.25rem; }
+    .hero-proof dt { font-size: 1.25rem; }
+    .hero-actions .cta-button,
+    .hero-actions .btn { width: 100%; text-align: center; }
+}
+
+/* Same lift the prep cards needed. Measured on this page in dark mode, the
+   brand primary gives 2.4:1 on the caption card and 2.8:1 for the headline
+   accent - both under their thresholds. #a78bfa reads 5.3:1 and 6.3:1. */
+:root[data-bs-theme="dark"] .hero-script,
+:root[data-bs-theme="dark"] .hero-eyebrow {
+    color: #a78bfa;
+}
+
+/* --------------------------------------------------------------------------
+   Admin panel
+   -------------------------------------------------------------------------- */
+
+.admin-brand { display: flex; align-items: baseline; gap: .5rem; }
+
+.admin-brand a {
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--tblr-body-color);
+    text-decoration: none;
+}
+
+.admin-brand-tag {
+    font-size: .6875rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--tblr-primary);
+}
+
+.admin-sidebar .navbar-nav { width: 100%; }
+.admin-sidebar .nav-item.active > .nav-link { font-weight: 600; color: var(--tblr-primary); }
+.admin-sidebar-foot { border-top: 1px solid var(--tblr-border-color); }
+
+.admin-login-brand {
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+/* Tiles are buttons so they can open their modal - strip the button chrome
+   back to the card it looks like. */
+.stat-card {
+    border: 1px solid var(--tblr-border-color);
+    background: var(--tblr-bg-surface);
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--rs-shadow-card);
+}
+
+.stat-hint {
+    font-size: .6875rem;
+    color: var(--tblr-secondary);
+    line-height: 1.3;
+    margin-top: .25rem;
+}
+
+/* Percentage-space viewBox with preserveAspectRatio="none", so the line
+   stretches to whatever width the card ends up at. Stroke is vector-effect
+   scaled to stay 1px after that stretch. */
+.timeline-chart svg {
+    width: 100%;
+    height: 11rem;
+    display: block;
+    overflow: visible;
+}
+
+.timeline-line {
+    fill: none;
+    stroke: var(--tblr-primary);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+}
+
+.timeline-area {
+    fill: color-mix(in oklab, var(--tblr-primary) 16%, transparent);
+    stroke: none;
+}
+
+:root[data-bs-theme="dark"] .timeline-line { stroke: #a78bfa; }
+:root[data-bs-theme="dark"] .timeline-area {
+    fill: color-mix(in oklab, #a78bfa 20%, transparent);
+}
+
+.timeline-axis {
+    display: flex;
+    justify-content: space-between;
+    font-size: .75rem;
+    color: var(--tblr-secondary);
+    margin-top: .5rem;
+}
+
+.settings-preview {
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius);
+    padding: 1rem;
+    background: var(--tblr-bg-surface-secondary);
+}
+
+.settings-preview-brand {
+    font-weight: 800;
+    letter-spacing: .05em;
+    margin-bottom: .75rem;
+}
+
+.settings-preview-foot { font-size: .8125rem; }
+
+/* --- announcement notification (public site) ----------------------------- */
+
+.ann-bell { position: relative; }
+
+.ann-bell-dot {
+    position: absolute;
+    top: .3rem;
+    right: .3rem;
+    width: .5rem;
+    height: .5rem;
+    border-radius: 50%;
+    background: var(--tblr-red);
+    box-shadow: 0 0 0 2px var(--tblr-bg-surface);
+}
+
+.ann-item + .ann-item {
+    border-top: 1px solid var(--tblr-border-color);
+    margin-top: 1rem;
+    padding-top: 1rem;
+}
+
+.ann-body { white-space: pre-line; line-height: 1.55; }
+
+/* --- admin-posted jobs on the home page ---------------------------------- */
+
+.posted-jobs { padding: 0 0 3rem; }
+
+.posted-job-card { border-left: 3px solid var(--tblr-primary); }
+
+:root[data-bs-theme="dark"] .posted-job-card { border-left-color: #a78bfa; }
+
+.posted-job-desc {
+    color: var(--tblr-secondary);
+    font-size: .875rem;
+    line-height: 1.5;
+    white-space: pre-line;
+    margin: .5rem 0 0;
+}

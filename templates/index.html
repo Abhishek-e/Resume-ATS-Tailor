@@ -2,21 +2,61 @@
 {% block title %}Resumify - Build Your Career{% endblock %}
 
 {% block content %}
-        <!-- Hero Section -->
-    <section class="hero">
-        <h1>Create a professional resume in minutes with AI</h1>
-        <p class="subtitle">Build a beautiful resume, find your dream job, and grow your career—all in one place.</p>
-        
-        <!-- Check if user is logged in -->
-        {% if session.user_id %}
-            <div class="welcome-message">
-                Welcome back, <strong>{{ session.username }}</strong>
-            </div>
-            
-        {% else %}
-            <a href="{{ url_for('register') }}" class="cta-button">Get Started</a>
-            <p class="cta-subtext">Start for free.</p>
-        {% endif %}
+    <!-- Hero: copy on one side, portrait on the other, with the caption card
+         overlapping the photo on desktop and tucking back inside it on mobile. -->
+    <section class="hero-split">
+        <div class="hero-copy">
+            <span class="hero-eyebrow">Resume · Jobs · Interview prep</span>
+
+            <h1 class="hero-heading">
+                Create a professional resume
+                {# nbsp so "AI" can never be orphaned onto a line of its own #}
+                <span class="hero-script">in minutes</span>
+                with&nbsp;AI
+            </h1>
+
+            <p class="hero-lead">
+                Build a beautiful resume, find your dream job, and grow your career—all in one place.
+            </p>
+
+            {% if session.user_id %}
+                <div class="welcome-message">
+                    Welcome back, <strong>{{ session.username }}</strong>
+                </div>
+            {% else %}
+                <div class="hero-actions">
+                    <a href="{{ url_for('register') }}" class="cta-button">Get Started</a>
+                    <a href="{{ url_for('preparation') }}" class="btn btn-ghost-secondary btn-lg">
+                        Browse prep
+                    </a>
+                </div>
+                <p class="cta-subtext">Start for free.</p>
+            {% endif %}
+
+            <dl class="hero-proof">
+                <div>
+                    <dt>{{ prep_totals.questions }}</dt>
+                    <dd>practice questions</dd>
+                </div>
+                <div>
+                    <dt>{% if total_jobs %}{{ total_jobs }}{% else %}Live{% endif %}</dt>
+                    <dd>job openings</dd>
+                </div>
+                <div>
+                    <dt>{{ prep_totals.companies }}</dt>
+                    <dd>companies covered</dd>
+                </div>
+            </dl>
+        </div>
+
+        <figure class="hero-figure">
+            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=900&q=80"
+                 alt="A smiling student" width="900" height="1350" loading="eager">
+            <figcaption class="hero-figure-caption">
+                <span class="hero-script">Your next role,</span>
+                <span class="hero-figure-sub">one polished application away.</span>
+            </figcaption>
+        </figure>
     </section>
 
         <!-- Cards Section -->
@@ -68,6 +108,56 @@
             </a>
         </div>
     </section>
+
+    {% if posted_jobs %}
+        <!-- Openings published from the admin panel. Public: no account needed. -->
+        <section class="posted-jobs">
+            <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+                <div>
+                    <h2 class="home-jobs-title">Posted by {{ site.app_name }}</h2>
+                    <p class="home-jobs-sub mb-0">
+                        Openings shared directly by our team — apply on the employer's own page.
+                    </p>
+                </div>
+            </div>
+
+            <div class="row row-cards">
+                {% for post in posted_jobs %}
+                    <div class="col-12 col-md-6">
+                        <div class="card h-100 posted-job-card">
+                            <div class="card-body d-flex flex-column">
+                                <h3 class="card-title mb-1">{{ post.title }}</h3>
+                                <div class="text-secondary">
+                                    <strong>{{ post.company }}</strong>
+                                    {% if post.location %} &middot; {{ post.location }}{% endif %}
+                                </div>
+
+                                <div class="application-meta mt-2">
+                                    <span class="badge bg-primary-lt">{{ post.category }}</span>
+                                    <span class="badge bg-secondary-lt">{{ post.employment_type }}</span>
+                                    {% if post.salary %}
+                                        <span class="badge bg-secondary-lt">{{ post.salary }}</span>
+                                    {% endif %}
+                                    {% if post.department %}
+                                        <span class="badge bg-secondary-lt">{{ post.department }}</span>
+                                    {% endif %}
+                                </div>
+
+                                {% if post.description %}
+                                    <p class="posted-job-desc">{{ post.description }}</p>
+                                {% endif %}
+
+                                <div class="btn-list mt-3 pt-1 mt-auto">
+                                    <a href="{{ post.apply_url }}" target="_blank" rel="noopener noreferrer"
+                                       class="btn btn-primary">Apply now</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
 
     <!-- Company prep dashboard. Shares its markup with the Preparation page
          via the partial, so the two views cannot drift apart. -->

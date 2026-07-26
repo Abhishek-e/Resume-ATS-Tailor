@@ -1,0 +1,147 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_jobs" %}
+{% block title %}Job posts{% endblock %}
+{% block page_title %}Job posts{% endblock %}
+{% block page_sub %}
+    Published here, live on the home page for every visitor.
+{% endblock %}
+
+{% block content %}
+<div class="row row-cards">
+    <div class="col-12 col-xl-5">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">{{ 'Edit job post' if editing else 'Post a job' }}</h3>
+            </div>
+            <form method="POST" class="card-body">
+                {% if editing %}
+                    <input type="hidden" name="post_id" value="{{ editing.id }}">
+                {% endif %}
+
+                <div class="mb-3">
+                    <label class="form-label required" for="jp-title">Role title</label>
+                    <input type="text" id="jp-title" name="title" class="form-control" required
+                           value="{{ editing.title if editing else '' }}"
+                           placeholder="Backend Engineer">
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label required" for="jp-company">Company</label>
+                        <input type="text" id="jp-company" name="company" class="form-control" required
+                               value="{{ editing.company if editing else '' }}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="jp-location">Location</label>
+                        <input type="text" id="jp-location" name="location" class="form-control"
+                               value="{{ editing.location if editing else '' }}"
+                               placeholder="Remote / Bengaluru">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="jp-category">Category</label>
+                        <select id="jp-category" name="category" class="form-select">
+                            {% for cat in categories %}
+                                <option value="{{ cat }}"
+                                    {% if editing and editing.category == cat %}selected{% endif %}>{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="jp-type">Employment type</label>
+                        <select id="jp-type" name="employment_type" class="form-select">
+                            {% for t in employment_types %}
+                                <option value="{{ t }}"
+                                    {% if editing and editing.employment_type == t %}selected{% endif %}>{{ t }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="jp-department">Department</label>
+                        <input type="text" id="jp-department" name="department" class="form-control"
+                               value="{{ editing.department if editing else '' }}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="jp-salary">Salary / stipend</label>
+                        <input type="text" id="jp-salary" name="salary" class="form-control"
+                               value="{{ editing.salary if editing else '' }}"
+                               placeholder="₹8–12 LPA">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label required" for="jp-url">Application link</label>
+                    <input type="url" id="jp-url" name="apply_url" class="form-control" required
+                           value="{{ editing.apply_url if editing else '' }}"
+                           placeholder="https://careers.example.com/apply/123">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="jp-description">Description</label>
+                    <textarea id="jp-description" name="description" class="form-control" rows="5"
+                              placeholder="What the role involves, who it suits, how to apply.">{{ editing.description if editing else '' }}</textarea>
+                </div>
+
+                <div class="btn-list">
+                    <button type="submit" class="btn btn-primary">
+                        {{ 'Save changes' if editing else 'Publish job post' }}
+                    </button>
+                    {% if editing %}
+                        <a href="{{ url_for('admin_jobs') }}" class="btn btn-ghost-secondary">Cancel</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-7">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Published ({{ posts|length }})</h3>
+            </div>
+            {% if posts %}
+                <div class="list-group list-group-flush">
+                    {% for post in posts %}
+                        <div class="list-group-item">
+                            <div class="d-flex flex-wrap align-items-start gap-2">
+                                <div class="flex-fill" style="min-width: 0;">
+                                    <div class="fw-bold">{{ post.title }}</div>
+                                    <div class="text-secondary">
+                                        {{ post.company }}{% if post.location %} · {{ post.location }}{% endif %}
+                                    </div>
+                                    <div class="application-meta mt-1">
+                                        <span class="badge bg-secondary-lt">{{ post.category }}</span>
+                                        <span class="badge bg-secondary-lt">{{ post.employment_type }}</span>
+                                        {% if post.salary %}
+                                            <span class="badge bg-secondary-lt">{{ post.salary }}</span>
+                                        {% endif %}
+                                        <span class="text-secondary small">{{ post.created_at | admin_date }}</span>
+                                    </div>
+                                </div>
+                                <div class="btn-list flex-nowrap">
+                                    <a href="{{ url_for('admin_jobs', edit=post.id) }}"
+                                       class="btn btn-sm btn-ghost-secondary">Edit</a>
+                                    <form method="POST"
+                                          action="{{ url_for('admin_jobs_delete', post_id=post.id) }}"
+                                          onsubmit="return confirm('Delete this job post? It disappears from the home page immediately.');">
+                                        <button type="submit" class="btn btn-sm btn-ghost-danger">Delete</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="card-body text-secondary">
+                    Nothing published yet. The form on the left puts a role on the home page.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -24,6 +24,7 @@ from pypdf import PdfReader
 from werkzeug.security import generate_password_hash, check_password_hash
 from xhtml2pdf import pisa
 
+import adminstore
 import applykit
 import jobsources
 import jobstore
@@ -90,6 +91,33 @@ def _init_firestore():
 
 
 db = _init_firestore()
+adminstore.ensure_admin(db)
+
+
+@app.template_filter('admin_date')
+def _admin_date(epoch):
+    """Epoch float -> readable date. Blank for the 0 that means 'never recorded'."""
+    if not epoch:
+        return '—'
+    return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime('%d %b %Y, %H:%M')
+
+
+@app.context_processor
+def inject_site_context():
+    """
+    Site name, footer signature and pending announcements, on every page.
+
+    All three are served from adminstore's in-process cache, so this adds no
+    Firestore reads to a normal page load.
+    """
+    settings = adminstore.get_settings(db)
+    unseen = []
+    if session.get('user_id'):
+        unseen = adminstore.unseen_announcements(db, session.get('ann_seen_at', 0))
+    return {
+        'site': settings,
+        'pending_announcements': unseen,
+    }
 
 
 def login_required(view):
@@ -110,6 +138,22 @@ def login_required(view):
     return wrapped
 
 
+def admin_required(view):
+    """
+    Guards every /admin page except the login screen.
+
+    Admin state lives under its own session key, so signing in as an admin does
+    not grant a user session and vice versa - one is not an escalation of the
+    other.
+    """
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get('admin_email'):
+            return redirect(url_for('admin_login', next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
 # --- ROUTES ---
 
 @app.route('/')
@@ -122,6 +166,8 @@ def home():
         'prep_companies': prepsets.list_companies(),
         'prep_sectors': prepsets.sectors(),
         'prep_totals': prepsets.totals(),
+        # Admin-published openings, visible to everyone signed in or not.
+        'posted_jobs': adminstore.list_job_posts(db, limit=6),
     }
 
     # Never block the landing page on a cold fetch (~8s across four boards) -
@@ -220,6 +266,9 @@ def login():
         if user and check_password_hash(user['password'], password):
             session['user_id'] = email
             session['username'] = user['username']
+            # Carried in the session so the announcement bell costs no
+            # Firestore read per page; persisted on the user when dismissed.
+            session['ann_seen_at'] = user.get('ann_seen_at', 0)
             flash('Login successful!', 'success')
             return redirect(request.form.get('next') or url_for('home'))
         else:
@@ -1474,3 +1523,193 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     debug_mode = os.environ.get("FLASK_DEBUG", "true").lower() == "true"
     app.run(host="0.0.0.0", port=port, debug=debug_mode)
+
+
+# --- ADMIN PANEL -----------------------------------------------------------
+# Unlinked by design: nothing in the public navigation points at /admin, so it
+# is reached by typing the URL. That is obscurity, not access control - the
+# admin_required decorator is what actually guards these pages.
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        if db is None:
+            flash('Database is not configured on the server.', 'error')
+            return render_template('admin/login.html', next='')
+
+        email = request.form.get('email', '')
+        password = request.form.get('password', '')
+        if adminstore.check_admin_login(db, email, password):
+            session['admin_email'] = email.strip().lower()
+            return redirect(request.form.get('next') or url_for('admin_dashboard'))
+        flash('Invalid admin credentials.', 'error')
+
+    return render_template('admin/login.html', next=request.args.get('next', ''))
+
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin_email', None)
+    return redirect(url_for('admin_login'))
+
+
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    return render_template('admin/dashboard.html',
+                           analytics=adminstore.build_analytics(db))
+
+
+@app.route('/admin/jobs', methods=['GET', 'POST'])
+@admin_required
+def admin_jobs():
+    if request.method == 'POST':
+        form = {k: (v or '').strip() for k, v in request.form.items()}
+        if not form.get('title') or not form.get('company') or not form.get('apply_url'):
+            flash('Title, company and application link are all required.', 'error')
+        else:
+            post_id = form.get('post_id')
+            if post_id:
+                adminstore.update_job_post(db, post_id, form)
+                flash('Job post updated.', 'success')
+            else:
+                adminstore.create_job_post(db, form, session['admin_email'])
+                flash('Job posted — it is live on the home page.', 'success')
+            return redirect(url_for('admin_jobs'))
+
+    return render_template(
+        'admin/jobs.html',
+        posts=adminstore.list_job_posts(db),
+        categories=adminstore.JOB_CATEGORIES,
+        employment_types=adminstore.EMPLOYMENT_TYPES,
+        editing=adminstore.get_job_post(db, request.args.get('edit')) if request.args.get('edit') else None,
+    )
+
+
+@app.route('/admin/jobs/<post_id>/delete', methods=['POST'])
+@admin_required
+def admin_jobs_delete(post_id):
+    adminstore.delete_job_post(db, post_id)
+    flash('Job post deleted.', 'success')
+    return redirect(url_for('admin_jobs'))
+
+
+@app.route('/admin/users')
+@admin_required
+def admin_users():
+    return render_template('admin/users.html', users=adminstore.list_users(db))
+
+
+@app.route('/admin/users/<email>/reset', methods=['POST'])
+@admin_required
+def admin_users_reset(email):
+    new_password = request.form.get('new_password', '')
+    if len(new_password) < 6:
+        flash('That password is too short — use at least 6 characters.', 'error')
+    else:
+        adminstore.reset_user_password(db, email, new_password)
+        flash(f'Password reset for {email}. Pass it to them over a channel they already trust.', 'success')
+    return redirect(url_for('admin_users'))
+
+
+@app.route('/admin/users/<email>/email', methods=['POST'])
+@admin_required
+def admin_users_email(email):
+    new_email = request.form.get('new_email', '').strip().lower()
+    if not new_email or '@' not in new_email:
+        flash('Enter a valid email address.', 'error')
+    else:
+        try:
+            adminstore.update_user_email(db, email, new_email)
+            flash(f'{email} is now {new_email}.', 'success')
+        except ValueError as e:
+            flash(str(e), 'error')
+    return redirect(url_for('admin_users'))
+
+
+@app.route('/admin/analytics')
+@admin_required
+def admin_analytics():
+    return render_template('admin/analytics.html',
+                           analytics=adminstore.build_analytics(db))
+
+
+@app.route('/admin/announcements', methods=['GET', 'POST'])
+@admin_required
+def admin_announcements():
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        body = request.form.get('body', '').strip()
+        if not title or not body:
+            flash('An announcement needs both a title and a message.', 'error')
+        else:
+            adminstore.create_announcement(db, title, body, request.form.get('level', 'info'))
+            flash('Announcement published — signed-in users see it on their next page load.', 'success')
+            return redirect(url_for('admin_announcements'))
+
+    return render_template('admin/announcements.html',
+                           announcements=adminstore.list_announcements(db))
+
+
+@app.route('/admin/announcements/<ann_id>/delete', methods=['POST'])
+@admin_required
+def admin_announcements_delete(ann_id):
+    adminstore.delete_announcement(db, ann_id)
+    flash('Announcement removed.', 'success')
+    return redirect(url_for('admin_announcements'))
+
+
+@app.route('/admin/settings', methods=['GET', 'POST'])
+@admin_required
+def admin_settings():
+    if request.method == 'POST':
+        adminstore.save_settings(
+            db,
+            request.form.get('app_name', ''),
+            request.form.get('footer_signature', ''),
+        )
+        flash('Settings saved — they apply across the site immediately.', 'success')
+        return redirect(url_for('admin_settings'))
+
+    return render_template('admin/settings.html', settings=adminstore.get_settings(db))
+
+
+@app.route('/admin/profile', methods=['GET', 'POST'])
+@admin_required
+def admin_profile():
+    if request.method == 'POST':
+        current = request.form.get('current_password', '')
+        new_email = request.form.get('email', '').strip().lower()
+        new_password = request.form.get('new_password', '')
+
+        # Re-check the current password before either change: an unattended
+        # session should not be enough to take the account over.
+        if not adminstore.check_admin_login(db, session['admin_email'], current):
+            flash('Current password is incorrect.', 'error')
+        elif new_password and len(new_password) < 6:
+            flash('New password must be at least 6 characters.', 'error')
+        elif new_email and '@' not in new_email:
+            flash('Enter a valid email address.', 'error')
+        else:
+            adminstore.update_admin(db, new_email or None, new_password or None)
+            if new_email:
+                session['admin_email'] = new_email
+            flash('Admin account updated.', 'success')
+            return redirect(url_for('admin_profile'))
+
+    return render_template('admin/profile.html', admin=adminstore.get_admin(db))
+
+
+@app.route('/announcements/seen', methods=['POST'])
+@login_required
+def announcements_seen():
+    """Marks the bell as read. Stored on the user so it survives a new login."""
+    stamp = datetime.now(timezone.utc).timestamp()
+    session['ann_seen_at'] = stamp
+    if db is not None:
+        try:
+            db.collection('users').document(session['user_id']).update(
+                {'ann_seen_at': stamp})
+        except Exception:
+            pass   # session already updated; persistence is best-effort
+    return jsonify({"ok": True})

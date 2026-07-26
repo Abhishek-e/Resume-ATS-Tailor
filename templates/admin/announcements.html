@@ -1,0 +1,77 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_announcements" %}
+{% block title %}Announcements{% endblock %}
+{% block page_title %}Announcements{% endblock %}
+{% block page_sub %}
+    Published messages surface as a notification inside every signed-in account.
+{% endblock %}
+
+{% block content %}
+<div class="row row-cards">
+    <div class="col-12 col-lg-5">
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">New announcement</h3></div>
+            <form method="POST" class="card-body">
+                <div class="mb-3">
+                    <label class="form-label required" for="an-title">Title</label>
+                    <input type="text" id="an-title" name="title" class="form-control" required
+                           placeholder="Placement drive opens Monday">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label required" for="an-body">Message</label>
+                    <textarea id="an-body" name="body" class="form-control" rows="5" required
+                              placeholder="What students need to know, and what they should do."></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="an-level">Tone</label>
+                    <select id="an-level" name="level" class="form-select">
+                        <option value="info">Information</option>
+                        <option value="success">Good news</option>
+                        <option value="warning">Action needed</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Publish announcement</button>
+                <div class="form-hint mt-2">
+                    Everyone signed in sees it on their next page load, and it stays in their
+                    bell until they dismiss it.
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Published ({{ announcements|length }})</h3>
+            </div>
+            {% if announcements %}
+                <div class="list-group list-group-flush">
+                    {% for ann in announcements %}
+                        <div class="list-group-item">
+                            <div class="d-flex flex-wrap align-items-start gap-2">
+                                <div class="flex-fill" style="min-width: 0;">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-{{ 'green' if ann.level == 'success' else 'yellow' if ann.level == 'warning' else 'blue' }}-lt">
+                                            {{ ann.level }}
+                                        </span>
+                                        <span class="fw-bold">{{ ann.title }}</span>
+                                    </div>
+                                    <p class="text-secondary mb-1 mt-1">{{ ann.body }}</p>
+                                    <div class="text-secondary small">{{ ann.created_at | admin_date }}</div>
+                                </div>
+                                <form method="POST"
+                                      action="{{ url_for('admin_announcements_delete', ann_id=ann.id) }}"
+                                      onsubmit="return confirm('Remove this announcement?');">
+                                    <button type="submit" class="btn btn-sm btn-ghost-danger">Remove</button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="card-body text-secondary">Nothing published yet.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

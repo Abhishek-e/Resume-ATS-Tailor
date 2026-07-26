@@ -1,0 +1,54 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_settings" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_sub %}Changes apply across the public site as soon as they are saved.{% endblock %}
+
+{% block content %}
+<div class="row row-cards">
+    <div class="col-12 col-lg-7">
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Branding</h3></div>
+            <form method="POST" class="card-body">
+                <div class="mb-3">
+                    <label class="form-label" for="app-name">Application name</label>
+                    <input type="text" id="app-name" name="app_name" class="form-control"
+                           value="{{ settings.app_name }}" maxlength="40">
+                    <div class="form-hint">
+                        Replaces the wordmark in the header, the browser tab title and the footer.
+                        Leave it blank to fall back to the default.
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="footer-sig">Footer signature</label>
+                    <input type="text" id="footer-sig" name="footer_signature" class="form-control"
+                           value="{{ settings.footer_signature }}" maxlength="120">
+                    <div class="form-hint">
+                        Appears after the application name in the footer of every public page.
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save settings</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Preview</h3></div>
+            <div class="card-body">
+                <div class="settings-preview">
+                    <div class="settings-preview-brand">{{ settings.app_name|upper }}</div>
+                    <div class="settings-preview-foot text-secondary">
+                        {{ settings.app_name }} &mdash; {{ settings.footer_signature }}
+                    </div>
+                </div>
+                <p class="text-secondary small mb-0 mt-3">
+                    Shows what is saved now, not what is typed on the left — save to update it.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
