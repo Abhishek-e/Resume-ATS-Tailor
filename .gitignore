@@ -11,3 +11,6 @@ venv/
 env/
 # Dashboard folder
 flask-dashboard-volt/
+
+# Local Claude Code tooling (launch config, settings)
+.claude/
