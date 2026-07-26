@@ -111,7 +111,7 @@
 
     {% if posted_jobs %}
         <!-- Openings published from the admin panel. Public: no account needed. -->
-        <section class="posted-jobs">
+        <section class="posted-jobs" id="posted-jobs">
             <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
                 <div>
                     <h2 class="home-jobs-title">Posted by {{ site.app_name }}</h2>
@@ -147,9 +147,17 @@
                                     <p class="posted-job-desc">{{ post.description }}</p>
                                 {% endif %}
 
+                                {# Same gate the live listings use: a guest never
+                                   leaves for the employer's form, they are asked
+                                   to sign in and land back here afterwards. #}
                                 <div class="btn-list mt-3 pt-1 mt-auto">
-                                    <a href="{{ post.apply_url }}" target="_blank" rel="noopener noreferrer"
-                                       class="btn btn-primary">Apply now</a>
+                                    {% if session.user_id %}
+                                        <a href="{{ post.apply_url }}" target="_blank" rel="noopener noreferrer"
+                                           class="btn btn-primary">Apply now</a>
+                                    {% else %}
+                                        <a href="{{ url_for('login', next=url_for('home') + '#posted-jobs') }}"
+                                           class="btn btn-primary">Log in to apply</a>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
