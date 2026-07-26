@@ -1,0 +1,135 @@
+{#
+  Company prep dashboard - filters, company grid, the scroll gate and the
+  practice-set modal. Included by both the landing page section and the
+  standalone Preparation page so the two cannot drift apart.
+
+  Caller supplies `prep_return` - where login should send the visitor back to.
+
+  Cards and filters are public. The question sets are trimmed server-side for
+  guests in prepsets.get_set(), so the blur below is presentation, not the
+  access check.
+#}
+<div class="prep-controls mb-3">
+    <div class="input-icon">
+        <span class="input-icon-addon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24"
+                 viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                <path d="M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/>
+                <path d="M21 21l-6 -6"/>
+            </svg>
+        </span>
+        <input type="search" id="prep-search" class="form-control"
+               placeholder="Search a company, sector or topic" autocomplete="off"
+               aria-label="Search companies">
+    </div>
+    <div class="prep-chips" role="group" aria-label="Filter by sector">
+        <button type="button" class="btn btn-sm prep-chip active" data-sector="">All</button>
+        {% for sector in prep_sectors %}
+            <button type="button" class="btn btn-sm prep-chip" data-sector="{{ sector }}">{{ sector }}</button>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="row row-cards" id="prep-grid">
+    {% for company in prep_companies %}
+        <div class="col-12 col-sm-6 col-lg-3 prep-card-col"
+             data-sector="{{ company.sector }}"
+             data-search="{{ (company.name ~ ' ' ~ company.sector ~ ' ' ~ company.focus|join(' '))|lower }}">
+            <div class="card h-100 prep-card">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="avatar prep-avatar">{{ company.initials }}</span>
+                        <div style="min-width: 0;">
+                            <h3 class="card-title mb-0 text-truncate">{{ company.name }}</h3>
+                            <div class="text-secondary small">{{ company.sector }}</div>
+                        </div>
+                    </div>
+
+                    <p class="prep-blurb">{{ company.blurb }}</p>
+
+                    <div class="prep-badges">
+                        <span class="badge bg-secondary-lt">{{ company.round_count }} rounds</span>
+                        <span class="badge bg-secondary-lt">{{ company.question_count }} questions</span>
+                        <span class="badge prep-diff prep-diff-{{ company.difficulty|lower }}">
+                            {{ company.difficulty }}
+                        </span>
+                    </div>
+
+                    <div class="prep-focus">
+                        {% for area in company.focus %}<span>{{ area }}</span>{% endfor %}
+                    </div>
+
+                    <button type="button" class="btn btn-primary w-100 mt-3 mt-auto prep-open"
+                            data-slug="{{ company.slug }}" data-name="{{ company.name }}">
+                        {% if session.user_id %}Open practice set{% else %}Preview questions{% endif %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<p class="prep-empty text-secondary text-center py-4 d-none" id="prep-empty">
+    No company matches that search.
+</p>
+
+{% if not session.user_id %}
+    {# The gate: scrolling this into view blurs it and asks for an account.
+       The rows behind the blur are placeholders, never real questions. #}
+    <div class="prep-gate" id="prep-gate">
+        <div class="prep-gate-content" aria-hidden="true">
+            <h3 class="mb-3">Full question bank &amp; practice sets</h3>
+            {% for row in range(5) %}
+                <div class="prep-skeleton">
+                    <span class="prep-skeleton-tag"></span>
+                    <span class="prep-skeleton-line" style="width: {{ [92, 78, 85, 70, 88][row] }}%;"></span>
+                    <span class="prep-skeleton-line short" style="width: {{ [55, 62, 48, 58, 51][row] }}%;"></span>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="prep-gate-overlay">
+            <div class="prep-gate-card">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon mb-2" width="24" height="24"
+                     viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                    <path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6z"/>
+                    <path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0"/>
+                    <path d="M8 11v-4a4 4 0 1 1 8 0v4"/>
+                </svg>
+                <h3 class="mb-1">Log in to unlock every question</h3>
+                <p class="text-secondary mb-3">
+                    Free account. Unlocks all {{ prep_totals.questions }} questions with worked
+                    answers, and tracks the companies you have prepped for.
+                </p>
+                <div class="btn-list justify-content-center">
+                    <a href="{{ url_for('login', next=prep_return) }}" class="btn btn-primary">Log in</a>
+                    <a href="{{ url_for('register') }}" class="btn btn-ghost-secondary">Create account</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+{# Plain overlay rather than a Bootstrap modal: the vendored tabler.min.js is
+   deferred, so window.bootstrap does not exist when page scripts run. Find
+   Jobs solves it the same way. The two URLs prep.js needs ride on the dataset
+   so the script itself can stay a static file. #}
+<div id="prep-modal" class="cv-modal-overlay" style="display:none;"
+     data-register-url="{{ url_for('register') }}"
+     data-set-url-base="/prep/">
+    <div class="cv-modal prep-modal">
+        <div class="cv-modal-header">
+            <div>
+                <h3 class="m-0" id="prep-modal-title">Practice set</h3>
+                <div class="text-secondary small" id="prep-modal-sub"></div>
+            </div>
+            <button type="button" class="cv-modal-close" id="prep-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="cv-modal-body" id="prep-modal-body">
+            <div class="text-center py-4"><div class="spinner"></div></div>
+        </div>
+    </div>
+</div>

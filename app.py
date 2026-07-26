@@ -149,6 +149,17 @@ def home():
     )
 
 
+@app.route('/preparation')
+def preparation():
+    """Standalone prep dashboard. Public, same as the section on the home page."""
+    return render_template(
+        'preparation.html',
+        prep_companies=prepsets.list_companies(),
+        prep_sectors=prepsets.sectors(),
+        prep_totals=prepsets.totals(),
+    )
+
+
 @app.route('/prep/<slug>/set')
 def prep_set(slug):
     """

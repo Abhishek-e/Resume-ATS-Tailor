@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% set active_page = "preparation" %}
+{% block title %}Preparation - Resumify{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <h2 class="page-title">Preparation</h2>
+                <div class="text-secondary mt-1">
+                    Interview rounds, focus areas and worked answers for
+                    {{ prep_totals.companies }} companies.
+                    {% if not session.user_id %}
+                        Browse freely — log in to read every question.
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-12 col-md-auto ms-md-auto mt-2 mt-md-0">
+                <div class="btn-list">
+                    {% if not session.user_id %}
+                        <a href="{{ url_for('login', next=url_for('preparation')) }}"
+                           class="btn btn-ghost-secondary">Log in</a>
+                    {% endif %}
+                    <a href="{{ url_for('jobs') }}" class="btn btn-primary">Find Jobs</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+    <div class="row row-cards mb-3">
+        <div class="col-6 col-sm-4">
+            <div class="card">
+                <div class="card-body stat-tile">
+                    <div class="stat-label">Companies</div>
+                    <div class="stat-value">{{ prep_totals.companies }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-sm-4">
+            <div class="card">
+                <div class="card-body stat-tile">
+                    <div class="stat-label">Practice questions</div>
+                    <div class="stat-value">{{ prep_totals.questions }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-4">
+            <div class="card">
+                <div class="card-body stat-tile">
+                    <div class="stat-label">Sectors</div>
+                    <div class="stat-value">{{ prep_totals.sectors }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <section class="prep-dash" id="prep">
+        {% with prep_return = url_for('preparation') %}
+            {% include '_prep_dashboard.html' %}
+        {% endwith %}
+    </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='prep.js') }}" defer></script>
+{% endblock %}
