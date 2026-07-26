@@ -1151,3 +1151,212 @@ body {
     font-size: 1rem;
     line-height: 1.35;
 }
+
+/* --------------------------------------------------------------------------
+   Home - company prep dashboard
+   -------------------------------------------------------------------------- */
+
+.prep-dash { padding: 0 0 3.5rem; }
+
+.prep-title {
+    font-size: 1.375rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    margin: 0 0 .25rem;
+}
+
+.prep-sub {
+    color: var(--tblr-secondary);
+    font-size: .9375rem;
+    max-width: 70ch;
+}
+
+.prep-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 22rem) 1fr;
+    gap: .75rem;
+    align-items: center;
+}
+
+.prep-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .375rem;
+    justify-content: flex-end;
+}
+
+.prep-chip {
+    border: 1px solid var(--tblr-border-color);
+    background: transparent;
+    color: var(--tblr-secondary);
+    border-radius: 999px;
+    padding: .25rem .75rem;
+}
+
+.prep-chip:hover { color: var(--tblr-body-color); }
+
+.prep-chip.active {
+    background: var(--tblr-primary);
+    border-color: var(--tblr-primary);
+    color: #fff;
+}
+
+.prep-card { transition: transform .15s ease, box-shadow .15s ease; }
+
+.prep-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--tblr-box-shadow-card, 0 .5rem 1rem rgba(0, 0, 0, .12));
+}
+
+.prep-avatar {
+    background: color-mix(in oklab, var(--tblr-primary) 14%, transparent);
+    color: var(--tblr-primary);
+    font-weight: 700;
+    font-size: .8125rem;
+    flex-shrink: 0;
+}
+
+.prep-card .card-title { font-size: 1rem; }
+
+.prep-blurb {
+    color: var(--tblr-secondary);
+    font-size: .875rem;
+    line-height: 1.45;
+    margin: 0 0 .75rem;
+}
+
+.prep-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+    margin-bottom: .5rem;
+}
+
+.prep-diff-easy { background: var(--tblr-green-lt); color: var(--tblr-green); }
+.prep-diff-moderate { background: var(--tblr-yellow-lt); color: var(--tblr-yellow); }
+.prep-diff-hard { background: var(--tblr-red-lt); color: var(--tblr-red); }
+
+.prep-focus {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem .5rem;
+    font-size: .75rem;
+    color: var(--tblr-secondary);
+}
+
+.prep-focus span::after { content: ' ·'; }
+.prep-focus span:last-child::after { content: ''; }
+
+/* --- the scroll gate ---------------------------------------------------- */
+
+.prep-gate { position: relative; margin-top: 1.5rem; }
+
+.prep-gate-content {
+    /* Unblurred until the block is scrolled to, then eased in. The rows behind
+       it are placeholders - the real questions are withheld server-side. */
+    filter: blur(0);
+    transition: filter .45s ease;
+    padding: 1.5rem;
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius);
+    background: var(--tblr-bg-surface);
+    min-height: 15rem;
+    user-select: none;
+}
+
+.prep-gate.is-locked .prep-gate-content { filter: blur(7px); }
+
+.prep-gate-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .45s ease;
+}
+
+.prep-gate.is-locked .prep-gate-overlay { opacity: 1; pointer-events: auto; }
+
+.prep-gate-card {
+    background: var(--tblr-bg-surface);
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius);
+    box-shadow: 0 .75rem 2rem rgba(0, 0, 0, .18);
+    padding: 1.5rem;
+    text-align: center;
+    max-width: 26rem;
+}
+
+.prep-gate-card h3 { font-size: 1.125rem; font-weight: 600; }
+.prep-gate-card .icon { color: var(--tblr-primary); }
+
+.prep-skeleton { margin-bottom: 1.25rem; }
+
+.prep-skeleton-tag,
+.prep-skeleton-line {
+    display: block;
+    height: .75rem;
+    border-radius: 999px;
+    background: var(--tblr-border-color);
+    margin-bottom: .5rem;
+}
+
+.prep-skeleton-tag { width: 4.5rem; height: 1rem; }
+.prep-skeleton-line { width: 88%; }
+.prep-skeleton-line.short { width: 55%; margin-bottom: 0; }
+
+/* --- practice set modal -------------------------------------------------- */
+
+.prep-modal-meta { display: flex; gap: .375rem; flex-wrap: wrap; }
+
+.prep-rounds {
+    color: var(--tblr-secondary);
+    font-size: .9375rem;
+    padding-left: 1.25rem;
+    margin-bottom: 0;
+}
+
+.prep-q {
+    border-top: 1px solid var(--tblr-border-color);
+    padding-top: 1rem;
+    margin-top: 1rem;
+}
+
+.prep-q-prompt { margin-bottom: .5rem; line-height: 1.5; }
+
+.prep-q-answer summary {
+    cursor: pointer;
+    font-size: .875rem;
+    color: var(--tblr-primary);
+}
+
+.prep-q-answer p {
+    color: var(--tblr-secondary);
+    font-size: .9375rem;
+    line-height: 1.5;
+}
+
+/* The modal body scrolls, so a gate inside it must not blur content that is
+   scrolled past - keep the overlay pinned to the block, not the viewport. */
+#prep-modal .prep-gate-content { min-height: 10rem; }
+
+@media (max-width: 767.98px) {
+    .prep-controls { grid-template-columns: 1fr; }
+    .prep-chips { justify-content: flex-start; }
+}
+
+.prep-modal { width: min(760px, 100%); }
+
+/* Same problem the dashboard bars hit: the brand primary reads fine on white
+   but drops to ~2.2:1 against the dark surface, which fails AA for the avatar
+   initials and the answer toggle. Lift it on dark only - #a78bfa measures
+   4.8:1 on the tinted avatar chip and 5.3:1 on the card surface. */
+:root[data-bs-theme="dark"] .prep-avatar,
+:root[data-bs-theme="dark"] .prep-q-answer summary {
+    color: #a78bfa;
+}
+
+:root[data-bs-theme="dark"] .prep-gate-card .icon { color: #a78bfa; }

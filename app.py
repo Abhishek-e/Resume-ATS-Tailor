@@ -27,6 +27,7 @@ from xhtml2pdf import pisa
 import applykit
 import jobsources
 import jobstore
+import prepsets
 
 load_dotenv()
 
@@ -116,13 +117,20 @@ def home():
     user_id = session.get('user_id')
     all_jobs = jobstore.all_jobs()
 
+    # Static data, so the prep dashboard renders even on the cold-cache path.
+    prep = {
+        'prep_companies': prepsets.list_companies(),
+        'prep_sectors': prepsets.sectors(),
+        'prep_totals': prepsets.totals(),
+    }
+
     # Never block the landing page on a cold fetch (~8s across four boards) -
     # warm it in the background and let the section fill in on the next load.
     if not all_jobs:
         jobstore.warm_async(_fetch_live_jobs)
         return render_template(
             'index.html', preview_jobs=[], total_jobs=0,
-            jobs_warming=jobstore.is_warming(),
+            jobs_warming=jobstore.is_warming(), **prep,
         )
 
     profile = _user_job_profile(_load_profile_details())
@@ -137,7 +145,26 @@ def home():
         total_jobs=len(all_jobs),
         jobs_warming=False,
         personalised=personalised,
+        **prep,
     )
+
+
+@app.route('/prep/<slug>/set')
+def prep_set(slug):
+    """
+    One company's practice set.
+
+    Deliberately not behind @login_required: a guest gets a real response, just
+    a shortened one. The withheld questions are dropped in prepsets.get_set(),
+    so the lock survives someone deleting the blur in devtools.
+    """
+    payload = prepsets.get_set(slug, unlocked=bool(session.get('user_id')))
+    if payload is None:
+        return jsonify({"error": "Unknown company."}), 404
+
+    if not payload['unlocked']:
+        payload['login_url'] = url_for('login', next=url_for('home') + '#prep')
+    return jsonify(payload)
 
 
 @app.route('/register', methods=['GET', 'POST'])
