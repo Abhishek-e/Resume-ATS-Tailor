@@ -35,6 +35,12 @@ services:
       - key: OPENROUTER_MODEL
         sync: false
 
+      # Google Identity Services client id. Public by design (it ships in the
+      # page source), so it is set here rather than as a secret. Leave it unset
+      # and the Google button simply does not render.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+
       # --- Find Jobs -----------------------------------------------------
       # Comma-separated. Board tokens come from the careers-page URL:
       # boards.greenhouse.io/<token> and jobs.lever.co/<company>.

@@ -1673,3 +1673,163 @@ body {
     white-space: pre-line;
     margin: .5rem 0 0;
 }
+
+/* --------------------------------------------------------------------------
+   Auth - one page, two panes, sliding panel
+   Both forms are always in the DOM. Desktop slides a panel across them;
+   below lg the panel is dropped and the panes are simply swapped, because a
+   horizontal slide on a phone costs width the form needs.
+   -------------------------------------------------------------------------- */
+
+.auth-page {
+    display: flex;
+    justify-content: center;
+    padding: 2.5rem 0 4rem;
+}
+
+.auth-shell {
+    position: relative;
+    width: min(56rem, 100%);
+    min-height: 34rem;
+    background: var(--tblr-bg-surface);
+    border: 1px solid var(--tblr-border-color);
+    border-radius: 1.25rem;
+    box-shadow: var(--rs-shadow-lift);
+    overflow: hidden;
+}
+
+.auth-pane {
+    padding: 2.5rem clamp(1.25rem, 4vw, 3rem);
+}
+
+.auth-form { max-width: 22rem; margin: 0 auto; }
+
+.auth-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    margin: 0 0 .25rem;
+}
+
+.auth-sub {
+    color: var(--tblr-secondary);
+    font-size: .9375rem;
+    margin: 0 0 1.5rem;
+}
+
+.auth-google {
+    display: flex;
+    justify-content: center;
+    min-height: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin: 0 0 1.25rem;
+    color: var(--tblr-secondary);
+    font-size: .8125rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--tblr-border-color);
+}
+
+.auth-switch {
+    margin: 1.25rem 0 0;
+    text-align: center;
+    color: var(--tblr-secondary);
+    font-size: .875rem;
+}
+
+.btn-link-plain {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--tblr-primary);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+:root[data-bs-theme="dark"] .btn-link-plain { color: #a78bfa; }
+
+/* --- below lg: stack, no slide ------------------------------------------ */
+
+@media (max-width: 991.98px) {
+    .auth-shell { min-height: 0; }
+    .auth-pane-register { display: none; }
+    .auth-shell.is-register .auth-pane-login { display: none; }
+    .auth-shell.is-register .auth-pane-register { display: block; }
+}
+
+/* --- lg and up: both panes side by side, panel slides over one ----------- */
+
+@media (min-width: 992px) {
+    .auth-shell { display: grid; grid-template-columns: 1fr 1fr; }
+
+    .auth-pane {
+        grid-row: 1;
+        display: flex;
+        align-items: center;
+        /* Both panes are always rendered and always laid out; only the panel
+           on top moves. Transitioning opacity rather than display keeps the
+           inputs focusable in a predictable order. */
+        transition: opacity .5s ease;
+    }
+
+    .auth-pane-login { grid-column: 1; }
+    .auth-pane-register { grid-column: 2; }
+
+    .auth-slider {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        width: 50%;
+        overflow: hidden;
+        background: linear-gradient(150deg, var(--tblr-primary), #7c3aed 70%);
+        color: #fff;
+        transition: transform .55s cubic-bezier(.4, 0, .2, 1);
+        z-index: 2;
+    }
+
+    .auth-shell.is-register .auth-slider { transform: translateX(-100%); }
+
+    .auth-slider-face {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .75rem;
+        text-align: center;
+        padding: 2.5rem;
+        transition: opacity .35s ease;
+    }
+
+    .auth-slider-face h3 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+    .auth-slider-face p { max-width: 26ch; margin: 0; opacity: .9; line-height: 1.55; }
+
+    /* The panel covers the register pane by default, so the face showing must
+       be the one inviting you to register. */
+    .auth-slider-to-login { opacity: 0; pointer-events: none; }
+    .auth-shell.is-register .auth-slider-to-register { opacity: 0; pointer-events: none; }
+    .auth-shell.is-register .auth-slider-to-login { opacity: 1; pointer-events: auto; }
+
+    /* Whichever pane is under the panel is hidden from the pointer and from
+       the tab order - it is behind an opaque surface. */
+    .auth-pane-register { opacity: 0; pointer-events: none; }
+    .auth-shell.is-register .auth-pane-register { opacity: 1; pointer-events: auto; }
+    .auth-shell.is-register .auth-pane-login { opacity: 0; pointer-events: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-slider, .auth-slider-face, .auth-pane { transition: none; }
+}

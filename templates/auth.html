@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Create your account' if mode == 'register' else 'Log in' }} - {{ site.app_name }}{% endblock %}
+
+{% block content %}
+{#
+  One page for both forms. /login and /register both render this - the route
+  only decides which panel starts in front, so existing links and the `next`
+  redirects keep working and a JS failure still leaves a usable form.
+#}
+<div class="auth-page">
+    <div class="auth-shell{% if mode == 'register' %} is-register{% endif %}" id="auth-shell">
+
+        <!-- Log in -->
+        <div class="auth-pane auth-pane-login">
+            <form method="POST" action="{{ url_for('login') }}" class="auth-form">
+                <input type="hidden" name="next" value="{{ next }}">
+                <h2 class="auth-title">Welcome back</h2>
+                <p class="auth-sub">Log in to pick up where you left off.</p>
+
+                {% if google_client_id %}
+                    <div class="auth-google" data-auth-google></div>
+                    <div class="auth-divider"><span>or use your email</span></div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label class="form-label" for="login-email">Email address</label>
+                    <input type="email" id="login-email" name="email" class="form-control"
+                           placeholder="you@example.com" autocomplete="email" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="login-password">Password</label>
+                    <input type="password" id="login-password" name="password" class="form-control"
+                           placeholder="Your password" autocomplete="current-password" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">Log in</button>
+
+                <p class="auth-switch d-lg-none">
+                    New here?
+                    <button type="button" class="btn-link-plain" data-auth-toggle="register">Create an account</button>
+                </p>
+            </form>
+        </div>
+
+        <!-- Register -->
+        <div class="auth-pane auth-pane-register">
+            <form method="POST" action="{{ url_for('register') }}" class="auth-form">
+                <h2 class="auth-title">Create your account</h2>
+                <p class="auth-sub">Free, and it takes about a minute.</p>
+
+                {% if google_client_id %}
+                    <div class="auth-google" data-auth-google></div>
+                    <div class="auth-divider"><span>or use your email</span></div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label class="form-label" for="reg-username">Full name</label>
+                    <input type="text" id="reg-username" name="username" class="form-control"
+                           placeholder="Your name" autocomplete="name" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="reg-email">Email address</label>
+                    <input type="email" id="reg-email" name="email" class="form-control"
+                           placeholder="you@example.com" autocomplete="email" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="reg-password">Password</label>
+                    <input type="password" id="reg-password" name="password" class="form-control"
+                           placeholder="At least 6 characters" autocomplete="new-password"
+                           minlength="6" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">Get started</button>
+
+                <p class="auth-switch d-lg-none">
+                    Already registered?
+                    <button type="button" class="btn-link-plain" data-auth-toggle="login">Log in</button>
+                </p>
+            </form>
+        </div>
+
+        <!-- The sliding panel. Desktop only; below lg the panes stack and the
+             inline links above do the switching instead. -->
+        <div class="auth-slider d-none d-lg-flex" aria-hidden="true">
+            <div class="auth-slider-face auth-slider-to-register">
+                <h3>New to {{ site.app_name }}?</h3>
+                <p>Build an ATS-ready CV, track applications and prep for interviews — free.</p>
+                <button type="button" class="btn btn-outline-light" data-auth-toggle="register">
+                    Create an account
+                </button>
+            </div>
+            <div class="auth-slider-face auth-slider-to-login">
+                <h3>Already with us?</h3>
+                <p>Log in to get back to your resumes, applications and practice sets.</p>
+                <button type="button" class="btn btn-outline-light" data-auth-toggle="login">
+                    Log in
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var shell = document.getElementById('auth-shell');
+    if (!shell) { return; }
+
+    function show(mode) {
+        shell.classList.toggle('is-register', mode === 'register');
+        // Keep the address bar honest without a reload, so a refresh or a
+        // shared link lands on the panel the user was actually looking at.
+        var path = mode === 'register' ? '{{ url_for("register") }}' : '{{ url_for("login") }}';
+        try { history.replaceState(null, '', path + location.search); } catch (e) { /* ignore */ }
+    }
+
+    document.querySelectorAll('[data-auth-toggle]').forEach(function (btn) {
+        btn.addEventListener('click', function () { show(btn.dataset.authToggle); });
+    });
+})();
+</script>
+
+{% if google_client_id %}
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+window.handleGoogleCredential = function (response) {
+    fetch('{{ url_for("auth_google") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            credential: response.credential,
+            next: {{ (next or '')|tojson }},
+        }),
+    })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+            if (res.ok && res.d.redirect) {
+                window.location.href = res.d.redirect;
+            } else {
+                alert(res.d.error || 'Google sign-in failed. Try email instead.');
+            }
+        })
+        .catch(function () {
+            alert('Could not reach the server. Try email instead.');
+        });
+};
+
+// GIS calls this once its script finishes loading.
+window.onload = function () {
+    if (typeof google === 'undefined' || !google.accounts) { return; }
+
+    google.accounts.id.initialize({
+        client_id: {{ google_client_id|tojson }},
+        callback: window.handleGoogleCredential,
+    });
+
+    // One button per panel - both panels exist in the DOM at once.
+    document.querySelectorAll('[data-auth-google]').forEach(function (slot) {
+        google.accounts.id.renderButton(slot, {
+            theme: document.documentElement.getAttribute('data-bs-theme') === 'dark'
+                ? 'filled_black' : 'outline',
+            size: 'large',
+            width: 320,
+            text: 'continue_with',
+        });
+    });
+};
+</script>
+{% endif %}
+{% endblock %}

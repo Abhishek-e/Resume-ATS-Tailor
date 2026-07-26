@@ -17,7 +17,9 @@ from flask import (
     flash, send_file, session,
 )
 from google import genai
+from google.auth.transport import requests as google_requests
 from google.genai import types
+from google.oauth2 import id_token as google_id_token
 from openai import OpenAI
 from pydantic import BaseModel
 from pypdf import PdfReader
@@ -51,6 +53,12 @@ openrouter_client = OpenAI(
 ) if OPENROUTER_API_KEY else None
 
 RESUME_TEMPLATES = {"modern", "classic", "minimal"}
+
+# Google Identity Services. The client id is a public identifier - it ships in
+# the page source by design - so it is not a secret and needs no sync:false on
+# Render. Unset simply means the Google button is not rendered and email
+# sign-in carries on unchanged.
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 
 
 def _openrouter_generate(prompt, json_mode=False):
@@ -224,12 +232,44 @@ def prep_set(slug):
     return jsonify(payload)
 
 
+def _render_auth(mode):
+    """Both /login and /register render the same page; mode picks the panel."""
+    return render_template(
+        'auth.html',
+        mode=mode,
+        next=request.args.get('next', ''),
+        google_client_id=GOOGLE_CLIENT_ID,
+    )
+
+
+def _safe_next(target):
+    """
+    Only ever redirect within this site.
+
+    `next` arrives from a query string or a JSON body, so without this an
+    attacker could hand someone a login link that bounces to their own domain
+    after a real sign-in. A leading `//` is excluded too - browsers read that
+    as protocol-relative and would leave the site.
+    """
+    if not target or not target.startswith('/') or target.startswith('//'):
+        return None
+    return target
+
+
+def _start_session(email, user):
+    session['user_id'] = email
+    session['username'] = user.get('username') or email.split('@')[0]
+    # Carried in the session so the announcement bell costs no Firestore read
+    # per page; persisted on the user when dismissed.
+    session['ann_seen_at'] = user.get('ann_seen_at', 0)
+
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         if db is None:
             flash('Database is not configured on the server.', 'error')
-            return render_template('register.html')
+            return _render_auth('register')
 
         username = request.form['username']
         email = request.form['email'].strip().lower()
@@ -243,12 +283,13 @@ def register():
                 'username': username,
                 'email': email,
                 'password': generate_password_hash(password),
+                'auth_provider': 'password',
                 'created_at': firestore.SERVER_TIMESTAMP,
             })
             flash('Registration successful! Please login.', 'success')
             return redirect(url_for('login'))
 
-    return render_template('register.html')
+    return _render_auth('register')
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -263,18 +304,69 @@ def login():
             if doc.exists:
                 user = doc.to_dict()
 
-        if user and check_password_hash(user['password'], password):
-            session['user_id'] = email
-            session['username'] = user['username']
-            # Carried in the session so the announcement bell costs no
-            # Firestore read per page; persisted on the user when dismissed.
-            session['ann_seen_at'] = user.get('ann_seen_at', 0)
+        # Google-created accounts have no password hash, so check for one
+        # before comparing - and say why, rather than "invalid password" on an
+        # account that never had one.
+        if user and not user.get('password'):
+            flash('That account was created with Google — use the Google button above.', 'error')
+        elif user and check_password_hash(user['password'], password):
+            _start_session(email, user)
             flash('Login successful!', 'success')
-            return redirect(request.form.get('next') or url_for('home'))
+            return redirect(_safe_next(request.form.get('next')) or url_for('home'))
         else:
             flash('Invalid email or password.', 'error')
 
-    return render_template('login.html', next=request.args.get('next', ''))
+    return _render_auth('login')
+
+
+@app.route('/auth/google', methods=['POST'])
+def auth_google():
+    """
+    Verifies a Google Identity Services credential and signs the user in,
+    registering them on first use.
+
+    The token is verified server-side against Google's public keys and our own
+    client id - a credential minted for someone else's site will not pass, so
+    nothing here trusts what the browser claims.
+    """
+    if not GOOGLE_CLIENT_ID:
+        return jsonify({"error": "Google sign-in is not configured on this server."}), 503
+    if db is None:
+        return jsonify({"error": "Database is not configured on the server."}), 503
+
+    credential = (request.get_json(silent=True) or {}).get('credential')
+    if not credential:
+        return jsonify({"error": "Missing Google credential."}), 400
+
+    try:
+        claims = google_id_token.verify_oauth2_token(
+            credential, google_requests.Request(), GOOGLE_CLIENT_ID)
+    except ValueError as e:
+        return jsonify({"error": f"Could not verify that Google account: {e}"}), 401
+
+    if not claims.get('email_verified'):
+        return jsonify({"error": "That Google account has no verified email."}), 401
+
+    email = claims['email'].strip().lower()
+    user_ref = db.collection('users').document(email)
+    doc = user_ref.get()
+
+    if doc.exists:
+        user = doc.to_dict()
+    else:
+        # No password field: this account can only ever be reached through
+        # Google, and /login says so rather than failing as a bad password.
+        user = {
+            'username': claims.get('name') or email.split('@')[0],
+            'email': email,
+            'auth_provider': 'google',
+            'created_at': firestore.SERVER_TIMESTAMP,
+        }
+        user_ref.set(user)
+
+    _start_session(email, user)
+    target = _safe_next((request.get_json(silent=True) or {}).get('next'))
+    return jsonify({"redirect": target or url_for('home')})
 
 
 @app.route('/logout')
