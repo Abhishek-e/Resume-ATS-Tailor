@@ -35,10 +35,18 @@ services:
       - key: OPENROUTER_MODEL
         sync: false
 
-      # Google Identity Services client id. Public by design (it ships in the
-      # page source), so it is set here rather than as a secret. Leave it unset
-      # and the Google button simply does not render.
-      - key: GOOGLE_CLIENT_ID
+      # Firebase Auth (Google sign-in). Only the web API key is needed - the
+      # auth domain and project id are derived from the service account.
+      # Public by design: every Firebase web app ships this in page source.
+      # Unset, the Google button does not render and email sign-in is
+      # unaffected. Google must also be enabled under Authentication >
+      # Sign-in method, with the Render domain in Authorised domains.
+      - key: FIREBASE_WEB_API_KEY
+        sync: false
+      # Both optional - only set them if they differ from the service account.
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_AUTH_DOMAIN
         sync: false
 
       # --- Find Jobs -----------------------------------------------------

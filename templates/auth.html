@@ -17,7 +17,7 @@
                 <h2 class="auth-title">Welcome back</h2>
                 <p class="auth-sub">Log in to pick up where you left off.</p>
 
-                {% if google_client_id %}
+                {% if firebase_config %}
                     <div class="auth-google" data-auth-google></div>
                     <div class="auth-divider"><span>or use your email</span></div>
                 {% endif %}
@@ -48,7 +48,7 @@
                 <h2 class="auth-title">Create your account</h2>
                 <p class="auth-sub">Free, and it takes about a minute.</p>
 
-                {% if google_client_id %}
+                {% if firebase_config %}
                     <div class="auth-google" data-auth-google></div>
                     <div class="auth-divider"><span>or use your email</span></div>
                 {% endif %}
@@ -121,51 +121,83 @@
 })();
 </script>
 
-{% if google_client_id %}
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<script>
-window.handleGoogleCredential = function (response) {
-    fetch('{{ url_for("auth_google") }}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            credential: response.credential,
-            next: {{ (next or '')|tojson }},
-        }),
-    })
-        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-        .then(function (res) {
-            if (res.ok && res.d.redirect) {
-                window.location.href = res.d.redirect;
-            } else {
-                alert(res.d.error || 'Google sign-in failed. Try email instead.');
+{% if firebase_config %}
+{#
+  Firebase Authentication, Google provider. The config below is public by
+  design - every Firebase web app ships it in page source. What guards the
+  flow is that the browser only ever returns a signed ID token, which
+  /auth/google verifies with the service account before trusting any of it.
+
+  Module script, so it is deferred by default and `type="module"` gives it
+  its own scope - no globals leak into the page.
+#}
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {
+    getAuth, GoogleAuthProvider, signInWithPopup
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const app = initializeApp({{ firebase_config|tojson }});
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+function button(label) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn w-100 auth-google-btn';
+    btn.innerHTML =
+        '<svg class="auth-google-mark" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">' +
+        '<path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>' +
+        '<path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.02-3.7H.96v2.34A9 9 0 0 0 9 18z"/>' +
+        '<path fill="#FBBC05" d="M3.98 10.72a5.4 5.4 0 0 1 0-3.44V4.94H.96a9 9 0 0 0 0 8.12l3.02-2.34z"/>' +
+        '<path fill="#EA4335" d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58C13.46.9 11.42 0 9 0A9 9 0 0 0 .96 4.94l3.02 2.34C4.68 5.16 6.66 3.58 9 3.58z"/>' +
+        '</svg><span>' + label + '</span>';
+    return btn;
+}
+
+async function signIn(btn) {
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    try {
+        const result = await signInWithPopup(auth, provider);
+        const token = await result.user.getIdToken();
+
+        const res = await fetch('{{ url_for("auth_google") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: token, next: {{ (next or '')|tojson }} }),
+        });
+        const data = await res.json();
+        if (res.ok && data.redirect) {
+            window.location.href = data.redirect;
+            return;
+        }
+        throw new Error(data.error || 'Sign-in failed.');
+    } catch (err) {
+        // A closed popup is the user changing their mind, not a failure.
+        const code = err && err.code;
+        if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+            const slot = btn.parentElement;
+            let note = slot.querySelector('.auth-google-error');
+            if (!note) {
+                note = document.createElement('div');
+                note.className = 'auth-google-error';
+                slot.appendChild(note);
             }
-        })
-        .catch(function () {
-            alert('Could not reach the server. Try email instead.');
-        });
-};
+            note.textContent = (err && err.message) || 'Google sign-in failed. Use email instead.';
+        }
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
+}
 
-// GIS calls this once its script finishes loading.
-window.onload = function () {
-    if (typeof google === 'undefined' || !google.accounts) { return; }
-
-    google.accounts.id.initialize({
-        client_id: {{ google_client_id|tojson }},
-        callback: window.handleGoogleCredential,
-    });
-
-    // One button per panel - both panels exist in the DOM at once.
-    document.querySelectorAll('[data-auth-google]').forEach(function (slot) {
-        google.accounts.id.renderButton(slot, {
-            theme: document.documentElement.getAttribute('data-bs-theme') === 'dark'
-                ? 'filled_black' : 'outline',
-            size: 'large',
-            width: 320,
-            text: 'continue_with',
-        });
-    });
-};
+document.querySelectorAll('[data-auth-google]').forEach(function (slot) {
+    const label = slot.closest('.auth-pane-register')
+        ? 'Sign up with Google' : 'Continue with Google';
+    const btn = button(label);
+    btn.addEventListener('click', function () { signIn(btn); });
+    slot.appendChild(btn);
+});
 </script>
 {% endif %}
 {% endblock %}

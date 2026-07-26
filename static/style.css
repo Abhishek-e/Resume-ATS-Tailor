@@ -1717,11 +1717,35 @@ body {
     margin: 0 0 1.5rem;
 }
 
-.auth-google {
+.auth-google { margin-bottom: 1rem; }
+
+/* Google's brand guidance: our own button, their mark, neutral surface. */
+.auth-google-btn {
     display: flex;
+    align-items: center;
     justify-content: center;
-    min-height: 2.5rem;
-    margin-bottom: 1rem;
+    gap: .625rem;
+    border: 1px solid var(--tblr-border-color);
+    background: var(--tblr-bg-surface);
+    color: var(--tblr-body-color);
+    font-weight: 500;
+    padding: .5rem 1rem;
+}
+
+.auth-google-btn:hover:not(:disabled) {
+    background: var(--tblr-bg-surface-secondary);
+    color: var(--tblr-body-color);
+}
+
+.auth-google-btn:disabled { opacity: .6; cursor: progress; }
+
+.auth-google-mark { flex-shrink: 0; }
+
+.auth-google-error {
+    margin-top: .5rem;
+    color: var(--tblr-danger);
+    font-size: .8125rem;
+    line-height: 1.4;
 }
 
 .auth-divider {

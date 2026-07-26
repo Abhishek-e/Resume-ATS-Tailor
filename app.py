@@ -10,16 +10,14 @@ import firebase_admin
 from docx import Document
 from docx.shared import Pt, RGBColor
 from dotenv import load_dotenv
-from firebase_admin import credentials, firestore
+from firebase_admin import auth as firebase_auth, credentials, firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from flask import (
     Flask, abort, jsonify, render_template, request, redirect, url_for,
     flash, send_file, session,
 )
 from google import genai
-from google.auth.transport import requests as google_requests
 from google.genai import types
-from google.oauth2 import id_token as google_id_token
 from openai import OpenAI
 from pydantic import BaseModel
 from pypdf import PdfReader
@@ -54,11 +52,45 @@ openrouter_client = OpenAI(
 
 RESUME_TEMPLATES = {"modern", "classic", "minimal"}
 
-# Google Identity Services. The client id is a public identifier - it ships in
-# the page source by design - so it is not a secret and needs no sync:false on
-# Render. Unset simply means the Google button is not rendered and email
-# sign-in carries on unchanged.
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+# Firebase Authentication, Google provider.
+#
+# The web config below is public by design - it ships in the page source of
+# every Firebase app and is not a credential. What actually protects the flow
+# is that the browser only ever returns a signed ID token, which the server
+# verifies with the service account already loaded above. Access is controlled
+# in the Firebase console (authorised domains + enabled providers), not by
+# keeping these values quiet.
+#
+# Unset the API key and the Google button simply is not rendered; email
+# sign-in is unaffected.
+FIREBASE_WEB_API_KEY = os.environ.get("FIREBASE_WEB_API_KEY", "").strip()
+FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "").strip()
+FIREBASE_AUTH_DOMAIN = os.environ.get("FIREBASE_AUTH_DOMAIN", "").strip()
+
+
+def _firebase_web_config():
+    """
+    Client config for the Firebase JS SDK.
+
+    project id and auth domain are derived from the service account when they
+    are not set explicitly, so the only value that has to be supplied by hand
+    is the web API key.
+    """
+    if not FIREBASE_WEB_API_KEY:
+        return None
+
+    project_id = FIREBASE_PROJECT_ID
+    if not project_id:
+        try:
+            project_id = firebase_admin.get_app().project_id or ""
+        except Exception:
+            project_id = ""
+
+    return {
+        "apiKey": FIREBASE_WEB_API_KEY,
+        "authDomain": FIREBASE_AUTH_DOMAIN or (f"{project_id}.firebaseapp.com" if project_id else ""),
+        "projectId": project_id,
+    }
 
 
 def _openrouter_generate(prompt, json_mode=False):
@@ -238,7 +270,7 @@ def _render_auth(mode):
         'auth.html',
         mode=mode,
         next=request.args.get('next', ''),
-        google_client_id=GOOGLE_CLIENT_ID,
+        firebase_config=_firebase_web_config(),
     )
 
 
@@ -322,28 +354,30 @@ def login():
 @app.route('/auth/google', methods=['POST'])
 def auth_google():
     """
-    Verifies a Google Identity Services credential and signs the user in,
-    registering them on first use.
+    Verifies a Firebase ID token and signs the user in, registering them on
+    first use.
 
-    The token is verified server-side against Google's public keys and our own
-    client id - a credential minted for someone else's site will not pass, so
-    nothing here trusts what the browser claims.
+    The browser does the Google popup and hands back a token; this checks the
+    signature and audience against our own Firebase project using the service
+    account. Nothing here trusts the email the page claims - it is read out of
+    the verified token.
     """
-    if not GOOGLE_CLIENT_ID:
+    if not FIREBASE_WEB_API_KEY:
         return jsonify({"error": "Google sign-in is not configured on this server."}), 503
     if db is None:
         return jsonify({"error": "Database is not configured on the server."}), 503
 
     credential = (request.get_json(silent=True) or {}).get('credential')
     if not credential:
-        return jsonify({"error": "Missing Google credential."}), 400
+        return jsonify({"error": "Missing sign-in token."}), 400
 
     try:
-        claims = google_id_token.verify_oauth2_token(
-            credential, google_requests.Request(), GOOGLE_CLIENT_ID)
-    except ValueError as e:
+        claims = firebase_auth.verify_id_token(credential)
+    except Exception as e:
         return jsonify({"error": f"Could not verify that Google account: {e}"}), 401
 
+    if not claims.get('email'):
+        return jsonify({"error": "That Google account exposed no email address."}), 401
     if not claims.get('email_verified'):
         return jsonify({"error": "That Google account has no verified email."}), 401
 
