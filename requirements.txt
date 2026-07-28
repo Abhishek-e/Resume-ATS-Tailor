@@ -12,3 +12,4 @@ pypdf
 # these - no browser engine, so nothing here needs system packages.
 requests
 feedparser
+openpyxl

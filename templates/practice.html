@@ -60,7 +60,47 @@
             </div>
         </div>
 
-        <div class="card practice-list-card">
+        <div class="card" id="practice-detail">
+            <div class="card-body">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2" id="detail-badges"></div>
+                <h3 class="mb-2" id="detail-title"></h3>
+                <div class="text-secondary practice-prompt" id="detail-prompt"></div>
+
+                <div id="detail-options" class="practice-options d-none"></div>
+
+                <div id="detail-example" class="practice-example d-none">
+                    <div class="practice-example-row">
+                        <span class="practice-example-label">Input</span>
+                        <code id="detail-input"></code>
+                    </div>
+                    <div class="practice-example-row">
+                        <span class="practice-example-label">Output</span>
+                        <code id="detail-output"></code>
+                    </div>
+                    <p class="practice-example-note mb-0" id="detail-explanation"></p>
+                </div>
+
+                <div id="detail-function" class="practice-function d-none">
+                    <div class="practice-function-head">
+                        <span>Example function</span>
+                        <button type="button" class="btn btn-sm btn-ghost-secondary"
+                                id="detail-function-load">Load into editor</button>
+                    </div>
+                    <pre class="practice-function-body"><code id="detail-function-code"></code></pre>
+                </div>
+
+                <details class="prep-q-answer mt-3 d-none" id="detail-answer-wrap">
+                    <summary>Show answer</summary>
+                    <p class="mb-0 mt-2 text-secondary" id="detail-answer"></p>
+                </details>
+
+                <a href="#" target="_blank" rel="noopener noreferrer"
+                   class="btn btn-sm btn-ghost-secondary mt-3 d-none" id="detail-link">
+                    Open on LeetCode
+                </a>
+            </div>
+        </div>
+        <div class="card practice-list-card mt-3">
             <div class="list-group list-group-flush practice-list" id="practice-list">
                 {% for item in items %}
                     <button type="button"
@@ -83,37 +123,6 @@
             </p>
         </div>
 
-        <div class="card mt-3" id="practice-detail">
-            <div class="card-body">
-                <div class="d-flex flex-wrap align-items-center gap-2 mb-2" id="detail-badges"></div>
-                <h3 class="mb-2" id="detail-title"></h3>
-                <p class="text-secondary" id="detail-prompt"></p>
-
-                <div id="detail-options" class="practice-options d-none"></div>
-
-                <div id="detail-example" class="practice-example d-none">
-                    <div class="practice-example-row">
-                        <span class="practice-example-label">Input</span>
-                        <code id="detail-input"></code>
-                    </div>
-                    <div class="practice-example-row">
-                        <span class="practice-example-label">Output</span>
-                        <code id="detail-output"></code>
-                    </div>
-                    <p class="practice-example-note mb-0" id="detail-explanation"></p>
-                </div>
-
-                <details class="prep-q-answer mt-3 d-none" id="detail-answer-wrap">
-                    <summary>Show answer</summary>
-                    <p class="mb-0 mt-2 text-secondary" id="detail-answer"></p>
-                </details>
-
-                <a href="#" target="_blank" rel="noopener noreferrer"
-                   class="btn btn-sm btn-ghost-secondary mt-3 d-none" id="detail-link">
-                    Open on LeetCode
-                </a>
-            </div>
-        </div>
     </div>
 
     <!-- RIGHT: the code workspace -->
@@ -170,7 +179,40 @@
         answerWrap: document.getElementById('detail-answer-wrap'),
         answer: document.getElementById('detail-answer'),
         link: document.getElementById('detail-link'),
+        fnWrap: document.getElementById('detail-function'),
+        fnCode: document.getElementById('detail-function-code'),
+        fnLoad: document.getElementById('detail-function-load'),
     };
+
+    // Formatting for admin-written prompts. Everything is escaped first, then
+    // a deliberately small set of marks is re-introduced - so a question can
+    // carry code and emphasis without the field becoming an HTML injection
+    // point.
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text == null ? '' : text;
+        return div.innerHTML;
+    }
+
+    function format(text) {
+        var html = escapeHtml(text);
+        html = html.replace(/```([\s\S]*?)```/g, function (_m, code) {
+            return '<pre class="practice-code-block"><code>' + code.trim() + '</code></pre>';
+        });
+        html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+        html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/(^|\n)\s*[-*]\s+(.+)/g, '$1<li>$2</li>');
+        html = html.replace(/(<li>[\s\S]*<\/li>)/, '<ul>$1</ul>');
+        return html.replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>');
+    }
+
+    document.getElementById('detail-function-load').addEventListener('click', function () {
+        var fn = items[current] && items[current].example_function;
+        if (fn) {
+            document.getElementById('code-editor').value = fn;
+            saveDraft();
+        }
+    });
 
     function badge(text, cls) {
         var span = document.createElement('span');
@@ -197,8 +239,16 @@
         if (item.acceptance_pct) { el.badges.appendChild(badge(item.acceptance_pct + '% acceptance')); }
 
         el.title.textContent = item.title;
-        el.prompt.textContent = item.prompt ||
-            'Work the problem from the title and the example, then write your solution on the right.';
+        el.prompt.innerHTML = item.prompt
+            ? '<p>' + format(item.prompt) + '</p>'
+            : '<p>Work the problem from the title and the example, then write your solution on the right.</p>';
+
+        if (item.example_function) {
+            el.fnCode.textContent = item.example_function;
+            el.fnWrap.classList.remove('d-none');
+        } else {
+            el.fnWrap.classList.add('d-none');
+        }
 
         // MCQ options
         el.options.innerHTML = '';
@@ -289,7 +339,10 @@
     function loadDraft() {
         var saved = null;
         try { saved = localStorage.getItem(draftKey()); } catch (e) { /* ignore */ }
-        editor.value = saved || STARTERS[language.value] || '';
+        var item = items[current];
+        editor.value = saved
+            || (item && item.example_function ? item.example_function : '')
+            || STARTERS[language.value] || '';
         output.textContent = '';
         status.textContent = 'not run yet';
     }

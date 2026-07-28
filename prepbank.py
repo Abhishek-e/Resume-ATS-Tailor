@@ -157,6 +157,9 @@ def add_question(db, data: dict, author: str) -> str:
         "options": [o for o in (data.get('options') or []) if o.strip()],
         "answer": (data.get('answer') or '').strip(),
         "explanation": (data.get('explanation') or '').strip(),
+        # Starter code shown on the practice desk and loaded into the editor,
+        # so a question can hand over a signature rather than a blank file.
+        "example_function": (data.get('example_function') or '').rstrip(),
         "url": (data.get('url') or '').strip(),
         "created_by": author,
         "created_at": time.time(),
@@ -267,3 +270,194 @@ def build_analytics(db) -> dict:
         "per_company": per_company,
         "recent": list_custom(db)[:10],
     }
+
+
+# --- spreadsheet import/export ---------------------------------------------
+# Columns are the questionnaire form, in the order it asks for them, so the
+# sheet and the form stay recognisably the same thing.
+SHEET_COLUMNS = [
+    "Company name", "Type of question", "Difficulty", "Short title",
+    "Question", "Example function", "Option A", "Option B", "Option C",
+    "Option D", "Answer", "Explanation", "Reference link",
+]
+
+
+def build_template_workbook():
+    """The blank sheet an admin downloads, fills in and uploads back."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Questions"
+
+    header_fill = PatternFill("solid", fgColor="5B4BDB")
+    for col, name in enumerate(SHEET_COLUMNS, start=1):
+        cell = ws.cell(row=1, column=col, value=name)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = header_fill
+        cell.alignment = Alignment(vertical="center")
+        ws.column_dimensions[cell.column_letter].width = \
+            34 if name in ("Question", "Example function", "Explanation") else 18
+    ws.freeze_panes = "A2"
+
+    # Dropdowns rather than free text, so an upload cannot invent a type or a
+    # difficulty the app does not understand.
+    type_rule = DataValidation(
+        type="list", formula1='"{}"'.format(",".join(QUESTION_TYPES)), allow_blank=True)
+    diff_rule = DataValidation(
+        type="list", formula1='"{}"'.format(",".join(DIFFICULTIES)), allow_blank=True)
+    ws.add_data_validation(type_rule)
+    ws.add_data_validation(diff_rule)
+    type_rule.add("B2:B500")
+    diff_rule.add("C2:C500")
+
+    samples = [
+        ["Amazon", "Coding", "Easy", "Two Sum",
+         "Given an array and a target, return the indices of the two numbers "
+         "that add up to the target.",
+         "function twoSum(nums, target) {\n    // your code here\n}",
+         "", "", "", "", "[0, 1]",
+         "Walk the array keeping value -> index in a map.",
+         "https://leetcode.com/problems/two-sum"],
+        ["Infosys", "MCQ", "Easy", "Binary search complexity",
+         "What is the time complexity of binary search on a sorted array?", "",
+         "O(1)", "O(log n)", "O(n)", "O(n log n)", "O(log n)",
+         "Each comparison halves the remaining search space.", ""],
+        ["Wipro", "Fill in the blank", "Medium", "SQL filtering",
+         "The ______ clause filters rows after GROUP BY has been applied.", "",
+         "", "", "", "", "HAVING",
+         "WHERE filters before grouping; HAVING filters after.", ""],
+    ]
+    for row in samples:
+        ws.append(row)
+    for row in ws.iter_rows(min_row=2, max_row=1 + len(samples)):
+        for cell in row:
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+    notes = wb.create_sheet("How to use")
+    for line in [
+        "Fill one question per row on the Questions sheet, then upload the file.",
+        "",
+        "Company name  required. An existing name adds to that company; a new one creates it.",
+        "Type          " + " / ".join(QUESTION_TYPES),
+        "Difficulty    " + " / ".join(DIFFICULTIES),
+        "Question      required. Supports **bold**, `code`, ```blocks``` and - bullets.",
+        "Options       MCQ only, at least two.",
+        "Answer        the correct option for MCQ, or the expected result.",
+        "",
+        "The three sample rows are examples - delete them before uploading, or",
+        "they will be imported alongside your own.",
+    ]:
+        notes.append([line])
+    notes.column_dimensions["A"].width = 100
+    return wb
+
+
+def parse_workbook(stream) -> tuple[list[dict], list[str]]:
+    """
+    Reads an uploaded sheet into question payloads.
+
+    Returns (rows, errors). Rows that fail validation are reported by line
+    number and skipped; the valid ones still import, so one bad row does not
+    cost the whole upload.
+    """
+    from openpyxl import load_workbook
+
+    wb = load_workbook(stream, data_only=True, read_only=True)
+    ws = wb["Questions"] if "Questions" in wb.sheetnames else wb.active
+
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return [], ["The sheet is empty."]
+
+    header = [str(c).strip().lower() if c else "" for c in rows[0]]
+    index = {name.lower(): i for i, name in enumerate(header) if name}
+
+    def cell(row, column):
+        i = index.get(column.lower())
+        if i is None or i >= len(row) or row[i] is None:
+            return ""
+        return str(row[i]).strip()
+
+    missing = [c for c in ("Company name", "Question") if c.lower() not in index]
+    if missing:
+        return [], [f"Missing required column(s): {', '.join(missing)}."]
+
+    parsed, errors = [], []
+    for line, row in enumerate(rows[1:], start=2):
+        if not any(row):
+            continue
+
+        company = cell(row, "Company name")
+        prompt = cell(row, "Question")
+        if not company or not prompt:
+            errors.append(f"Row {line}: needs both a company name and a question.")
+            continue
+
+        qtype = cell(row, "Type of question") or "Coding"
+        if qtype not in QUESTION_TYPES:
+            errors.append(f"Row {line}: '{qtype}' is not a question type.")
+            continue
+
+        difficulty = cell(row, "Difficulty") or "Medium"
+        if difficulty not in DIFFICULTIES:
+            errors.append(f"Row {line}: '{difficulty}' is not a difficulty.")
+            continue
+
+        options = [cell(row, f"Option {letter}") for letter in "ABCD"]
+        options = [o for o in options if o]
+        if qtype == "MCQ" and len(options) < 2:
+            errors.append(f"Row {line}: an MCQ needs at least two options.")
+            continue
+
+        parsed.append({
+            "company_name": company,
+            "type": qtype,
+            "difficulty": difficulty,
+            "title": cell(row, "Short title"),
+            "prompt": prompt,
+            "example_function": cell(row, "Example function"),
+            "options": options,
+            "answer": cell(row, "Answer"),
+            "explanation": cell(row, "Explanation"),
+            "url": cell(row, "Reference link"),
+        })
+
+    return parsed, errors
+
+
+def add_many(db, rows: list[dict], author: str) -> int:
+    """Bulk insert, one Firestore batch. Same collection as the form writes."""
+    if not rows:
+        return 0
+
+    batch = db.batch()
+    written = 0
+    for data in rows:
+        ref = db.collection('prep_questions').document()
+        batch.set(ref, {
+            "company_slug": slugify(data["company_name"]),
+            "company_name": data["company_name"],
+            "type": data["type"],
+            "difficulty": data["difficulty"],
+            "title": data.get("title", ""),
+            "prompt": data["prompt"],
+            "options": data.get("options", []),
+            "answer": data.get("answer", ""),
+            "explanation": data.get("explanation", ""),
+            "example_function": data.get("example_function", ""),
+            "url": data.get("url", ""),
+            "created_by": author,
+            "created_at": time.time(),
+        })
+        written += 1
+        # Firestore caps a batch at 500 writes.
+        if written % 400 == 0:
+            batch.commit()
+            batch = db.batch()
+
+    batch.commit()
+    invalidate()
+    return written

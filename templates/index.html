@@ -135,6 +135,9 @@
                                 <div class="application-meta mt-2">
                                     <span class="badge bg-primary-lt">{{ post.category }}</span>
                                     <span class="badge bg-secondary-lt">{{ post.employment_type }}</span>
+                                    {% if post.company_type %}
+                                        <span class="badge bg-blue-lt">{{ post.company_type }}</span>
+                                    {% endif %}
                                     {% if post.salary %}
                                         <span class="badge bg-secondary-lt">{{ post.salary }}</span>
                                     {% endif %}

@@ -38,6 +38,14 @@ JOB_CATEGORIES = [
 
 EMPLOYMENT_TYPES = ["Full-time", "Part-time", "Internship", "Contract", "Freelance"]
 
+# What kind of employer this is - asked when posting so students can tell a
+# product company from a services one at a glance, which is the distinction
+# most placement questions turn on.
+COMPANY_TYPES = [
+    "Product", "Service / Consulting", "Startup", "MNC",
+    "Government / PSU", "Non-profit", "Other",
+]
+
 _lock = threading.Lock()
 _settings_cache = None
 _announcements_cache = None
@@ -161,6 +169,7 @@ def create_job_post(db, data: dict, author: str) -> str:
         "category": data.get("category") or "Other",
         "department": data.get("department", ""),
         "employment_type": data.get("employment_type") or "Full-time",
+        "company_type": data.get("company_type") or "Other",
         "salary": data.get("salary", ""),
         "description": data.get("description", ""),
         "apply_url": data["apply_url"],
@@ -178,6 +187,7 @@ def update_job_post(db, post_id: str, data: dict) -> None:
         "category": data.get("category") or "Other",
         "department": data.get("department", ""),
         "employment_type": data.get("employment_type") or "Full-time",
+        "company_type": data.get("company_type") or "Other",
         "salary": data.get("salary", ""),
         "description": data.get("description", ""),
         "apply_url": data["apply_url"],

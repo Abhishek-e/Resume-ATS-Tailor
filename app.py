@@ -204,8 +204,8 @@ def home():
 
     # Static data, so the prep dashboard renders even on the cold-cache path.
     prep = {
-        'prep_companies': prepsets.list_companies(),
-        'prep_sectors': prepsets.sectors(),
+        'prep_companies': _prep_companies(),
+        'prep_sectors': _prep_sectors(),
         'prep_totals': _prep_totals(),
         # Admin-published openings, visible to everyone signed in or not.
         'posted_jobs': adminstore.list_job_posts(db, limit=6),
@@ -236,6 +236,45 @@ def home():
     )
 
 
+def _prep_companies():
+    """
+    Every company that has questions, not just the ones prepsets knows about.
+
+    A company created by adding a question in the admin panel had a working
+    practice page but no card, so searching for it on /preparation found
+    nothing. Synthesising a card here means anything with questions is
+    listed - and therefore searchable.
+    """
+    cards = prepsets.list_companies()
+    known = {c['slug'] for c in cards}
+
+    for slug, name in prepbank.company_names(db).items():
+        if slug in known:
+            continue
+        counts = prepbank.counts_for(db, slug)
+        types = [t for t, n in counts['by_type'].items() if n]
+        cards.append({
+            "slug": slug,
+            "name": name,
+            "sector": "Added by admin",
+            "difficulty": "Moderate",
+            "focus": types,
+            "rounds": [],
+            "blurb": f"{counts['total']} practice question"
+                     f"{'' if counts['total'] == 1 else 's'} added from the admin panel.",
+            "initials": name[:2].upper(),
+            "question_count": counts['total'],
+            "round_count": 0,
+        })
+
+    cards.sort(key=lambda c: c['name'].lower())
+    return cards
+
+
+def _prep_sectors():
+    return sorted({c['sector'] for c in _prep_companies()})
+
+
 def _prep_totals():
     """
     Headline counts for the prep pages.
@@ -256,8 +295,8 @@ def preparation():
     """Standalone prep dashboard. Public, same as the section on the home page."""
     return render_template(
         'preparation.html',
-        prep_companies=prepsets.list_companies(),
-        prep_sectors=prepsets.sectors(),
+        prep_companies=_prep_companies(),
+        prep_sectors=_prep_sectors(),
         prep_totals=_prep_totals(),
     )
 
@@ -299,6 +338,7 @@ def preparation_company(slug):
             "options": q.get('options') or [],
             "answer": q.get('answer', ''),
             "explanation": q.get('explanation', ''),
+            "example_function": q.get('example_function', ''),
             "acceptance_pct": q.get('acceptance_pct'),
             "frequency_pct": q.get('frequency_pct'),
         })
@@ -316,6 +356,7 @@ def preparation_company(slug):
             "options": [],
             "answer": q.get('answer', ''),
             "explanation": "",
+            "example_function": "",
             "acceptance_pct": None,
             "frequency_pct": None,
         })
@@ -1790,6 +1831,7 @@ def admin_jobs():
         posts=adminstore.list_job_posts(db),
         categories=adminstore.JOB_CATEGORIES,
         employment_types=adminstore.EMPLOYMENT_TYPES,
+        company_types=adminstore.COMPANY_TYPES,
         editing=adminstore.get_job_post(db, request.args.get('edit')) if request.args.get('edit') else None,
     )
 
@@ -1966,4 +2008,52 @@ def admin_questions():
 def admin_questions_delete(question_id):
     prepbank.delete_question(db, question_id)
     flash('Question removed.', 'success')
+    return redirect(url_for('admin_questions'))
+
+
+@app.route('/admin/questions/template.xlsx')
+@admin_required
+def admin_questions_template():
+    """The blank questionnaire sheet, generated rather than stored on disk."""
+    buffer = io.BytesIO()
+    prepbank.build_template_workbook().save(buffer)
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='questionnaire-template.xlsx',
+    )
+
+
+@app.route('/admin/questions/upload', methods=['POST'])
+@admin_required
+def admin_questions_upload():
+    upload = request.files.get('sheet')
+    if not upload or not upload.filename:
+        flash('Choose a spreadsheet to upload.', 'error')
+        return redirect(url_for('admin_questions'))
+    if not upload.filename.lower().endswith(('.xlsx', '.xlsm')):
+        flash('That is not an Excel file — upload the .xlsx template.', 'error')
+        return redirect(url_for('admin_questions'))
+
+    try:
+        rows, errors = prepbank.parse_workbook(upload.stream)
+    except Exception as e:
+        flash(f'Could not read that file: {e}', 'error')
+        return redirect(url_for('admin_questions'))
+
+    written = prepbank.add_many(db, rows, session['admin_email']) if rows else 0
+
+    if written:
+        flash(f'Imported {written} question{"" if written == 1 else "s"}.', 'success')
+    if errors:
+        # Report every rejected row rather than a count, so the admin can fix
+        # the sheet instead of guessing which line was wrong.
+        shown = errors[:10]
+        more = f' (+{len(errors) - 10} more)' if len(errors) > 10 else ''
+        flash('Skipped: ' + ' '.join(shown) + more, 'error')
+    if not written and not errors:
+        flash('That sheet had no rows to import.', 'error')
+
     return redirect(url_for('admin_questions'))

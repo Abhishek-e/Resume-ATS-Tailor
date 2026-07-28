@@ -62,6 +62,21 @@
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
+                        <label class="form-label" for="jp-company-type">Type of company</label>
+                        <select id="jp-company-type" name="company_type" class="form-select">
+                            {% for t in company_types %}
+                                <option value="{{ t }}"
+                                    {% if editing and editing.company_type == t %}selected{% endif %}>{{ t }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-hint">Shown on the card so students can tell a product
+                            company from a services one.</div>
+                    </div>
+                    <div class="col-md-6"></div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
                         <label class="form-label" for="jp-department">Department</label>
                         <input type="text" id="jp-department" name="department" class="form-control"
                                value="{{ editing.department if editing else '' }}">
@@ -117,6 +132,9 @@
                                     <div class="application-meta mt-1">
                                         <span class="badge bg-secondary-lt">{{ post.category }}</span>
                                         <span class="badge bg-secondary-lt">{{ post.employment_type }}</span>
+                                        {% if post.company_type %}
+                                            <span class="badge bg-blue-lt">{{ post.company_type }}</span>
+                                        {% endif %}
                                         {% if post.salary %}
                                             <span class="badge bg-secondary-lt">{{ post.salary }}</span>
                                         {% endif %}
