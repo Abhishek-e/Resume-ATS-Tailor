@@ -61,10 +61,18 @@
                         {% for area in company.focus %}<span>{{ area }}</span>{% endfor %}
                     </div>
 
-                    <button type="button" class="btn btn-primary w-100 mt-3 mt-auto prep-open"
-                            data-slug="{{ company.slug }}" data-name="{{ company.name }}">
-                        {% if session.user_id %}Open practice set{% else %}Preview questions{% endif %}
-                    </button>
+                    {# Signed in, the card opens the company's practice desk. Signed
+                       out it opens the preview modal exactly as before - the guest
+                       view is deliberately unchanged. #}
+                    {% if session.user_id %}
+                        <a href="{{ url_for('preparation_company', slug=company.slug) }}"
+                           class="btn btn-primary w-100 mt-3 mt-auto">Open practice set</a>
+                    {% else %}
+                        <button type="button" class="btn btn-primary w-100 mt-3 mt-auto prep-open"
+                                data-slug="{{ company.slug }}" data-name="{{ company.name }}">
+                            Preview questions
+                        </button>
+                    {% endif %}
                 </div>
             </div>
         </div>

@@ -26,6 +26,7 @@ from xhtml2pdf import pisa
 
 import adminstore
 import applykit
+import prepbank
 import jobsources
 import jobstore
 import prepsets
@@ -205,7 +206,7 @@ def home():
     prep = {
         'prep_companies': prepsets.list_companies(),
         'prep_sectors': prepsets.sectors(),
-        'prep_totals': prepsets.totals(),
+        'prep_totals': _prep_totals(),
         # Admin-published openings, visible to everyone signed in or not.
         'posted_jobs': adminstore.list_job_posts(db, limit=6),
     }
@@ -235,6 +236,21 @@ def home():
     )
 
 
+def _prep_totals():
+    """
+    Headline counts for the prep pages.
+
+    prepsets only knows about its own interview Q&A; the practice bank holds
+    an order of magnitude more. Counting one and labelling it "practice
+    questions" understated the number by ~200, so the two are summed here.
+    """
+    totals = dict(prepsets.totals())
+    totals['interview_questions'] = totals['questions']
+    totals['practice_questions'] = prepbank.total_questions(db)
+    totals['questions'] = totals['interview_questions'] + totals['practice_questions']
+    return totals
+
+
 @app.route('/preparation')
 def preparation():
     """Standalone prep dashboard. Public, same as the section on the home page."""
@@ -242,7 +258,73 @@ def preparation():
         'preparation.html',
         prep_companies=prepsets.list_companies(),
         prep_sectors=prepsets.sectors(),
-        prep_totals=prepsets.totals(),
+        prep_totals=_prep_totals(),
+    )
+
+
+@app.route('/preparation/<slug>')
+@login_required
+def preparation_company(slug):
+    """
+    The practice desk for one company. Signed-in only - a guest clicking the
+    same card gets the preview modal instead, which is why the card markup
+    branches on the session rather than this route redirecting.
+    """
+    base = prepsets.get_set(slug, unlocked=True)
+    names = prepbank.company_names(db)
+    if base is None and slug not in names:
+        abort(404)
+
+    if base is None:
+        # A company that exists only because the admin added questions for it.
+        base = {
+            "slug": slug, "name": names[slug], "sector": "Added by admin",
+            "difficulty": "Moderate", "focus": [], "rounds": [],
+            "blurb": "", "initials": names[slug][:2].upper(),
+        }
+
+    # Interview Q&A and practice problems are different shapes; flatten them
+    # into one list so the left rail is a single scrollable index.
+    items = []
+    for q in prepbank.questions_for(db, slug):
+        items.append({
+            "id": q.get('id'),
+            "kind": q.get('source', 'bank'),
+            "type": q.get('type', 'Coding'),
+            "title": q.get('title') or (q.get('prompt') or '')[:60],
+            "difficulty": q.get('difficulty', 'Medium'),
+            "prompt": q.get('prompt', ''),
+            "url": q.get('url', ''),
+            "example": q.get('example') or {},
+            "options": q.get('options') or [],
+            "answer": q.get('answer', ''),
+            "explanation": q.get('explanation', ''),
+            "acceptance_pct": q.get('acceptance_pct'),
+            "frequency_pct": q.get('frequency_pct'),
+        })
+
+    for index, q in enumerate(base.get('questions') or []):
+        items.append({
+            "id": f"interview:{slug}:{index}",
+            "kind": "interview",
+            "type": q.get('type', 'Interview'),
+            "title": q.get('prompt', '')[:70],
+            "difficulty": "Interview",
+            "prompt": q.get('prompt', ''),
+            "url": "",
+            "example": {},
+            "options": [],
+            "answer": q.get('answer', ''),
+            "explanation": "",
+            "acceptance_pct": None,
+            "frequency_pct": None,
+        })
+
+    return render_template(
+        'practice.html',
+        company=base,
+        items=items,
+        counts=prepbank.counts_for(db, slug),
     )
 
 
@@ -1839,3 +1921,49 @@ def announcements_seen():
         except Exception:
             pass   # session already updated; persistence is best-effort
     return jsonify({"ok": True})
+
+
+@app.route('/admin/questions', methods=['GET', 'POST'])
+@admin_required
+def admin_questions():
+    """
+    The questionnaire module: add practice questions per company, and report
+    on the bank as a whole.
+
+    Companies are keyed by a slug derived from the typed name, so entering a
+    company that already exists stacks onto it rather than creating a second
+    one - which is what makes "add to their stack" work without a picker.
+    """
+    if request.method == 'POST':
+        form = {k: (v or '').strip() for k, v in request.form.items()}
+        options = [o.strip() for o in request.form.getlist('options') if o.strip()]
+
+        if not form.get('company_name') or not form.get('prompt'):
+            flash('Company name and the question itself are both required.', 'error')
+        elif form.get('type') == 'MCQ' and len(options) < 2:
+            flash('An MCQ needs at least two options.', 'error')
+        elif form.get('type') == 'MCQ' and not form.get('answer'):
+            flash('Choose which option is correct.', 'error')
+        else:
+            prepbank.add_question(db, {**form, 'options': options}, session['admin_email'])
+            slug = prepbank.slugify(form['company_name'])
+            existing = len(prepbank.custom_for_slug(db, slug)) + len(prepbank.bank_questions(slug))
+            flash(f"Question added to {form['company_name']} — {existing} now in their stack.",
+                  'success')
+            return redirect(url_for('admin_questions'))
+
+    return render_template(
+        'admin/questions.html',
+        analytics=prepbank.build_analytics(db),
+        question_types=prepbank.QUESTION_TYPES,
+        difficulties=prepbank.DIFFICULTIES,
+        known_companies=sorted(prepbank.company_names(db).values()),
+    )
+
+
+@app.route('/admin/questions/<question_id>/delete', methods=['POST'])
+@admin_required
+def admin_questions_delete(question_id):
+    prepbank.delete_question(db, question_id)
+    flash('Question removed.', 'success')
+    return redirect(url_for('admin_questions'))

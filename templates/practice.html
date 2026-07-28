@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+{% set active_page = "preparation" %}
+{% block title %}{{ company.name }} practice - {{ site.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="avatar prep-avatar">{{ company.initials }}</span>
+                    <div>
+                        <h2 class="page-title mb-0">{{ company.name }}</h2>
+                        <div class="text-secondary">
+                            {{ counts.total }} practice question{{ '' if counts.total == 1 else 's' }}
+                            &middot; {{ counts.by_difficulty.Easy }} easy
+                            &middot; {{ counts.by_difficulty.Medium }} medium
+                            &middot; {{ counts.by_difficulty.Hard }} hard
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-auto ms-md-auto mt-2 mt-md-0">
+                <a href="{{ url_for('preparation') }}" class="btn btn-ghost-secondary">All companies</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if not items %}
+    <div class="card">
+        <div class="card-body text-secondary">
+            No questions for {{ company.name }} yet.
+        </div>
+    </div>
+{% else %}
+<div class="practice-grid">
+
+    <!-- LEFT: the question index and the selected question -->
+    <div class="practice-questions">
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="practice-filters">
+                    <select class="form-select form-select-sm" id="practice-difficulty" aria-label="Filter by difficulty">
+                        <option value="">All difficulties</option>
+                        <option>Easy</option>
+                        <option>Medium</option>
+                        <option>Hard</option>
+                        <option>Interview</option>
+                    </select>
+                    <select class="form-select form-select-sm" id="practice-type" aria-label="Filter by type">
+                        <option value="">All types</option>
+                        {% for t in items|map(attribute='type')|unique|sort %}
+                            <option>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card practice-list-card">
+            <div class="list-group list-group-flush practice-list" id="practice-list">
+                {% for item in items %}
+                    <button type="button"
+                            class="list-group-item list-group-item-action practice-item{% if loop.first %} active{% endif %}"
+                            data-index="{{ loop.index0 }}"
+                            data-difficulty="{{ item.difficulty }}"
+                            data-type="{{ item.type }}">
+                        <div class="d-flex align-items-start gap-2">
+                            <span class="practice-num">{{ loop.index }}</span>
+                            <span class="flex-fill practice-item-title">{{ item.title }}</span>
+                            <span class="badge prep-diff prep-diff-{{ item.difficulty|lower }}">
+                                {{ item.difficulty }}
+                            </span>
+                        </div>
+                    </button>
+                {% endfor %}
+            </div>
+            <p class="text-secondary text-center py-3 mb-0 d-none" id="practice-empty">
+                Nothing matches those filters.
+            </p>
+        </div>
+
+        <div class="card mt-3" id="practice-detail">
+            <div class="card-body">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2" id="detail-badges"></div>
+                <h3 class="mb-2" id="detail-title"></h3>
+                <p class="text-secondary" id="detail-prompt"></p>
+
+                <div id="detail-options" class="practice-options d-none"></div>
+
+                <div id="detail-example" class="practice-example d-none">
+                    <div class="practice-example-row">
+                        <span class="practice-example-label">Input</span>
+                        <code id="detail-input"></code>
+                    </div>
+                    <div class="practice-example-row">
+                        <span class="practice-example-label">Output</span>
+                        <code id="detail-output"></code>
+                    </div>
+                    <p class="practice-example-note mb-0" id="detail-explanation"></p>
+                </div>
+
+                <details class="prep-q-answer mt-3 d-none" id="detail-answer-wrap">
+                    <summary>Show answer</summary>
+                    <p class="mb-0 mt-2 text-secondary" id="detail-answer"></p>
+                </details>
+
+                <a href="#" target="_blank" rel="noopener noreferrer"
+                   class="btn btn-sm btn-ghost-secondary mt-3 d-none" id="detail-link">
+                    Open on LeetCode
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT: the code workspace -->
+    <div class="practice-code">
+        <div class="card h-100">
+            <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                <h3 class="card-title mb-0">Code</h3>
+                <select class="form-select form-select-sm w-auto ms-auto" id="code-language">
+                    <option value="javascript">JavaScript</option>
+                    <option value="python">Python</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C++</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-primary" id="code-run">Run</button>
+                <button type="button" class="btn btn-sm btn-ghost-secondary" id="code-reset">Reset</button>
+            </div>
+            <div class="card-body d-flex flex-column p-0">
+                <textarea id="code-editor" class="code-editor" spellcheck="false"
+                          aria-label="Code editor"></textarea>
+                <div class="code-output-wrap">
+                    <div class="code-output-head">
+                        <span>Output</span>
+                        <span class="text-secondary small" id="code-status">not run yet</span>
+                    </div>
+                    <pre class="code-output" id="code-output"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if items %}
+<script id="practice-data" type="application/json">{{ items|tojson }}</script>
+<script>
+(function () {
+    var items = JSON.parse(document.getElementById('practice-data').textContent);
+    var list = document.getElementById('practice-list');
+    var buttons = Array.prototype.slice.call(list.querySelectorAll('.practice-item'));
+    var empty = document.getElementById('practice-empty');
+    var current = 0;
+
+    var el = {
+        badges: document.getElementById('detail-badges'),
+        title: document.getElementById('detail-title'),
+        prompt: document.getElementById('detail-prompt'),
+        options: document.getElementById('detail-options'),
+        example: document.getElementById('detail-example'),
+        input: document.getElementById('detail-input'),
+        output: document.getElementById('detail-output'),
+        explanation: document.getElementById('detail-explanation'),
+        answerWrap: document.getElementById('detail-answer-wrap'),
+        answer: document.getElementById('detail-answer'),
+        link: document.getElementById('detail-link'),
+    };
+
+    function badge(text, cls) {
+        var span = document.createElement('span');
+        span.className = 'badge ' + (cls || 'bg-secondary-lt');
+        span.textContent = text;
+        return span;
+    }
+
+    function select(index) {
+        var item = items[index];
+        if (!item) { return; }
+        saveDraft();               // keep what was typed for the previous one
+        current = index;
+
+        buttons.forEach(function (b) {
+            b.classList.toggle('active', Number(b.dataset.index) === index);
+        });
+
+        el.badges.innerHTML = '';
+        el.badges.appendChild(badge(item.difficulty, 'prep-diff prep-diff-' + item.difficulty.toLowerCase()));
+        el.badges.appendChild(badge(item.type, 'bg-primary-lt'));
+        if (item.kind === 'custom') { el.badges.appendChild(badge('added by admin')); }
+        if (item.frequency_pct) { el.badges.appendChild(badge(item.frequency_pct + '% frequency')); }
+        if (item.acceptance_pct) { el.badges.appendChild(badge(item.acceptance_pct + '% acceptance')); }
+
+        el.title.textContent = item.title;
+        el.prompt.textContent = item.prompt ||
+            'Work the problem from the title and the example, then write your solution on the right.';
+
+        // MCQ options
+        el.options.innerHTML = '';
+        if (item.options && item.options.length) {
+            item.options.forEach(function (opt, i) {
+                var row = document.createElement('div');
+                row.className = 'practice-option';
+                row.textContent = String.fromCharCode(65 + i) + '. ' + opt;
+                el.options.appendChild(row);
+            });
+            el.options.classList.remove('d-none');
+        } else {
+            el.options.classList.add('d-none');
+        }
+
+        var hasExample = item.example && (item.example.input || item.example.output);
+        if (hasExample) {
+            el.input.textContent = item.example.input || '—';
+            el.output.textContent = item.example.output || '—';
+            el.explanation.textContent = item.example.explanation || '';
+            el.example.classList.remove('d-none');
+        } else {
+            el.example.classList.add('d-none');
+        }
+
+        var answer = item.answer || item.explanation;
+        if (answer) {
+            el.answer.textContent = answer;
+            el.answerWrap.classList.remove('d-none');
+            el.answerWrap.open = false;
+        } else {
+            el.answerWrap.classList.add('d-none');
+        }
+
+        if (item.url) {
+            el.link.href = item.url;
+            el.link.classList.remove('d-none');
+        } else {
+            el.link.classList.add('d-none');
+        }
+
+        loadDraft();
+    }
+
+    buttons.forEach(function (b) {
+        b.addEventListener('click', function () { select(Number(b.dataset.index)); });
+    });
+
+    // --- filters -----------------------------------------------------------
+    var diffSel = document.getElementById('practice-difficulty');
+    var typeSel = document.getElementById('practice-type');
+
+    function applyFilters() {
+        var d = diffSel.value, t = typeSel.value, shown = 0;
+        buttons.forEach(function (b) {
+            var ok = (!d || b.dataset.difficulty === d) && (!t || b.dataset.type === t);
+            b.classList.toggle('d-none', !ok);
+            if (ok) { shown++; }
+        });
+        empty.classList.toggle('d-none', shown !== 0);
+    }
+    diffSel.addEventListener('change', applyFilters);
+    typeSel.addEventListener('change', applyFilters);
+
+    // --- code workspace ----------------------------------------------------
+    var editor = document.getElementById('code-editor');
+    var language = document.getElementById('code-language');
+    var output = document.getElementById('code-output');
+    var status = document.getElementById('code-status');
+
+    var STARTERS = {
+        javascript: '// Write your solution, then press Run.\n// console.log output appears below.\n\nfunction solve(input) {\n\n}\n\nconsole.log(solve());\n',
+        python: '# Write your solution here.\n\ndef solve(data):\n    pass\n\nprint(solve(None))\n',
+        java: 'class Solution {\n    public static void main(String[] args) {\n\n    }\n}\n',
+        cpp: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n\n    return 0;\n}\n',
+    };
+
+    function draftKey() {
+        return 'practice:' + (items[current] ? items[current].id : 'x') + ':' + language.value;
+    }
+
+    function saveDraft() {
+        try {
+            if (editor.value.trim()) { localStorage.setItem(draftKey(), editor.value); }
+        } catch (e) { /* private mode - drafts just are not kept */ }
+    }
+
+    function loadDraft() {
+        var saved = null;
+        try { saved = localStorage.getItem(draftKey()); } catch (e) { /* ignore */ }
+        editor.value = saved || STARTERS[language.value] || '';
+        output.textContent = '';
+        status.textContent = 'not run yet';
+    }
+
+    editor.addEventListener('input', saveDraft);
+    language.addEventListener('change', loadDraft);
+    document.getElementById('code-reset').addEventListener('click', function () {
+        try { localStorage.removeItem(draftKey()); } catch (e) { /* ignore */ }
+        editor.value = STARTERS[language.value] || '';
+        output.textContent = '';
+        status.textContent = 'reset';
+    });
+
+    // JavaScript runs here, in a Worker: it has no DOM, no cookies and no
+    // access to this page, and a timeout kills an infinite loop. The other
+    // languages have no runner in the browser and say so rather than
+    // pretending to execute.
+    document.getElementById('code-run').addEventListener('click', function () {
+        saveDraft();
+        if (language.value !== 'javascript') {
+            status.textContent = 'no in-browser runner';
+            output.textContent =
+                language.options[language.selectedIndex].text +
+                ' cannot be executed in the browser. Your code is saved — run it in your own ' +
+                'environment, or switch to JavaScript to run it here.';
+            return;
+        }
+
+        status.textContent = 'running…';
+        output.textContent = '';
+
+        var src =
+            'self.onmessage = function (e) {' +
+            '  var logs = [];' +
+            '  var console = { log: function () {' +
+            '    logs.push(Array.prototype.map.call(arguments, function (a) {' +
+            '      try { return typeof a === "string" ? a : JSON.stringify(a); }' +
+            '      catch (err) { return String(a); }' +
+            '    }).join(" "));' +
+            '  } };' +
+            '  console.error = console.warn = console.info = console.log;' +
+            '  try {' +
+            '    (new Function("console", e.data))(console);' +
+            '    self.postMessage({ ok: true, logs: logs });' +
+            '  } catch (err) {' +
+            '    self.postMessage({ ok: false, logs: logs, error: String(err) });' +
+            '  }' +
+            '};';
+
+        var worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+        var done = false;
+
+        var timer = setTimeout(function () {
+            if (done) { return; }
+            done = true;
+            worker.terminate();
+            status.textContent = 'timed out';
+            output.textContent = 'Stopped after 3 seconds — check for an infinite loop.';
+        }, 3000);
+
+        worker.onmessage = function (e) {
+            if (done) { return; }
+            done = true;
+            clearTimeout(timer);
+            worker.terminate();
+            var data = e.data;
+            var text = (data.logs || []).join('\n');
+            if (!data.ok) {
+                text += (text ? '\n\n' : '') + data.error;
+                status.textContent = 'error';
+            } else {
+                status.textContent = 'ran without errors';
+            }
+            output.textContent = text || '(no output)';
+        };
+
+        worker.onerror = function (err) {
+            if (done) { return; }
+            done = true;
+            clearTimeout(timer);
+            worker.terminate();
+            status.textContent = 'error';
+            output.textContent = err.message || 'Could not run that code.';
+        };
+
+        worker.postMessage(editor.value);
+    });
+
+    select(0);
+})();
+</script>
+{% endif %}
+{% endblock %}

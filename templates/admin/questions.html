@@ -1,0 +1,243 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_questions" %}
+{% block title %}Questionnaire{% endblock %}
+{% block page_title %}Questionnaire{% endblock %}
+{% block page_sub %}
+    {{ analytics.questions }} questions across {{ analytics.companies }} companies —
+    {{ analytics.imported }} imported, {{ analytics.authored }} added here.
+{% endblock %}
+
+{% macro bars(rows, total) %}
+    {% if rows %}
+        <div class="bar-chart" role="table">
+            {% for row in rows %}
+                <div class="bar-row" role="row">
+                    <div class="bar-name" role="cell" title="{{ row.label }}">{{ row.label }}</div>
+                    <div class="bar-track" role="cell">
+                        <div class="bar-fill"
+                             style="width: {{ (row.count / total * 100) | round(1) if total else 0 }}%;"></div>
+                    </div>
+                    <div class="bar-value" role="cell">{{ row.count }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-secondary mb-0">Nothing recorded yet.</p>
+    {% endif %}
+{% endmacro %}
+
+{% block content %}
+
+<!-- Analytics -->
+<div class="row row-cards mb-3">
+    {% set tiles = [
+        ('Companies', analytics.companies),
+        ('Total questions', analytics.questions),
+        ('Avg per company', analytics.avg_per_company),
+        ('Easy', analytics.by_difficulty.Easy),
+        ('Medium', analytics.by_difficulty.Medium),
+        ('Hard', analytics.by_difficulty.Hard),
+    ] %}
+    {% for label, value in tiles %}
+        <div class="col-6 col-lg-2">
+            <div class="card">
+                <div class="card-body stat-tile">
+                    <div class="stat-label">{{ label }}</div>
+                    <div class="stat-value">{{ value }}</div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<div class="row row-cards">
+    <!-- Add a question -->
+    <div class="col-12 col-xl-5">
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Add a question</h3></div>
+            <form method="POST" class="card-body">
+                <div class="mb-3">
+                    <label class="form-label required" for="q-company">Company name</label>
+                    <input type="text" id="q-company" name="company_name" class="form-control"
+                           list="known-companies" required placeholder="Amazon">
+                    <datalist id="known-companies">
+                        {% for name in known_companies %}<option value="{{ name }}">{% endfor %}
+                    </datalist>
+                    <div class="form-hint">
+                        Type an existing name to add to that company's stack; a new name creates
+                        a new company.
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="q-type">Type of question</label>
+                        <select id="q-type" name="type" class="form-select">
+                            {% for t in question_types %}<option>{{ t }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="q-difficulty">Difficulty</label>
+                        <select id="q-difficulty" name="difficulty" class="form-select">
+                            {% for d in difficulties %}
+                                <option {% if d == 'Medium' %}selected{% endif %}>{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="q-title">Short title</label>
+                    <input type="text" id="q-title" name="title" class="form-control"
+                           placeholder="Two Sum">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label required" for="q-prompt">Question</label>
+                    <textarea id="q-prompt" name="prompt" class="form-control" rows="4" required
+                              placeholder="The question as the student should read it."></textarea>
+                </div>
+
+                <!-- MCQ options: only meaningful for one type, so shown for it only -->
+                <div class="mb-3 d-none" id="q-options-wrap">
+                    <label class="form-label">Options</label>
+                    {% for i in range(4) %}
+                        <input type="text" name="options" class="form-control mb-2"
+                               placeholder="Option {{ 'ABCD'[i] }}">
+                    {% endfor %}
+                    <div class="form-hint">Leave the ones you do not need blank.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="q-answer">Answer</label>
+                    <input type="text" id="q-answer" name="answer" class="form-control"
+                           placeholder="The correct option, or the expected result">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="q-explanation">Explanation</label>
+                    <textarea id="q-explanation" name="explanation" class="form-control" rows="3"
+                              placeholder="Why that answer is right."></textarea>
+                </div>
+
+                <div class="mb-3" id="q-url-wrap">
+                    <label class="form-label" for="q-url">Reference link</label>
+                    <input type="url" id="q-url" name="url" class="form-control"
+                           placeholder="https://leetcode.com/problems/...">
+                </div>
+
+                <button type="submit" class="btn btn-primary">Add question</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-7">
+        <div class="row row-cards">
+            <div class="col-12 col-md-6">
+                <div class="card h-100">
+                    <div class="card-header"><h3 class="card-title">Difficulty spread</h3></div>
+                    <div class="card-body">
+                        {{ bars([
+                            {'label': 'Easy', 'count': analytics.by_difficulty.Easy},
+                            {'label': 'Medium', 'count': analytics.by_difficulty.Medium},
+                            {'label': 'Hard', 'count': analytics.by_difficulty.Hard},
+                        ], analytics.questions) }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6">
+                <div class="card h-100">
+                    <div class="card-header"><h3 class="card-title">By question type</h3></div>
+                    <div class="card-body">
+                        {{ bars(analytics.by_type_rows, analytics.questions) }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Questions per company</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-vcenter card-table">
+                            <thead>
+                                <tr>
+                                    <th>Company</th><th>Total</th><th>Imported</th>
+                                    <th>Added here</th><th>Easy</th><th>Medium</th><th>Hard</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for row in analytics.per_company %}
+                                <tr>
+                                    <td>{{ row.name }}</td>
+                                    <td><strong>{{ row.total }}</strong></td>
+                                    <td class="text-secondary">{{ row.imported }}</td>
+                                    <td class="text-secondary">{{ row.authored }}</td>
+                                    <td class="text-secondary">{{ row.by_difficulty.Easy }}</td>
+                                    <td class="text-secondary">{{ row.by_difficulty.Medium }}</td>
+                                    <td class="text-secondary">{{ row.by_difficulty.Hard }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {% if analytics.recent %}
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Recently added here</h3>
+                        </div>
+                        <div class="list-group list-group-flush">
+                            {% for q in analytics.recent %}
+                                <div class="list-group-item">
+                                    <div class="d-flex flex-wrap align-items-start gap-2">
+                                        <div class="flex-fill" style="min-width: 0;">
+                                            <div class="fw-bold">{{ q.title or q.prompt[:70] }}</div>
+                                            <div class="application-meta mt-1">
+                                                <span class="badge bg-primary-lt">{{ q.company_name }}</span>
+                                                <span class="badge bg-secondary-lt">{{ q.type }}</span>
+                                                <span class="badge prep-diff prep-diff-{{ q.difficulty|lower }}">
+                                                    {{ q.difficulty }}
+                                                </span>
+                                                <span class="text-secondary small">{{ q.created_at | admin_date }}</span>
+                                            </div>
+                                        </div>
+                                        <form method="POST"
+                                              action="{{ url_for('admin_questions_delete', question_id=q.id) }}"
+                                              onsubmit="return confirm('Remove this question?');">
+                                            <button type="submit" class="btn btn-sm btn-ghost-danger">Remove</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var type = document.getElementById('q-type');
+    var options = document.getElementById('q-options-wrap');
+    var url = document.getElementById('q-url-wrap');
+    if (!type) { return; }
+
+    function sync() {
+        options.classList.toggle('d-none', type.value !== 'MCQ');
+        url.classList.toggle('d-none', type.value !== 'Coding');
+    }
+    type.addEventListener('change', sync);
+    sync();
+})();
+</script>
+{% endblock %}

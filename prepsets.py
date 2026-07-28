@@ -251,6 +251,7 @@ COMPANIES = [
             {"type": "Probability", "prompt": "Three fair coins are tossed. Given that at least "
              "one is heads, what is the probability all three are?",
              "answer": "1/7. Conditioning removes TTT, leaving 7 equally likely outcomes."},
+
             {"type": "Probability", "prompt": "You draw two cards from a standard deck without "
              "replacement. Probability both are aces?",
              "answer": "(4/52) x (3/51) = 1/221."},
@@ -265,6 +266,171 @@ COMPANIES = [
              "how do modern implementations mitigate it?",
              "answer": "Collisions collapsing a bucket into a list. Mitigated by treeifying "
                        "large buckets into a balanced tree and by randomised hash seeds."},
+        ],
+    },
+
+    # --- companies carried over from the imported question bank -------------
+    # These arrived with the ai-resume-agent import. Their slugs match the bank
+    # keys in prepbank.BANK_COMPANIES, which is what joins the practice desk to
+    # the card. The rounds and blurbs below are written here; the coding
+    # problems come from the bank.
+    {
+        "slug": "meta",
+        "name": "Meta",
+        "sector": "Product",
+        "difficulty": "Hard",
+        "focus": ["Data structures", "System design", "Product sense"],
+        "rounds": ["Recruiter screen", "Technical screen", "On-site loop", "Team matching"],
+        "blurb": "Two coding rounds back to back, both timed tightly — pace matters as much "
+                 "as the solution, and interviewers expect you to talk while you type.",
+        "questions": [
+            {"type": "Coding", "prompt": "Given a string, remove the minimum number of "
+             "parentheses so the result is valid.",
+             "answer": "Two passes with a stack of indices, or one pass tracking open count "
+                       "then a reverse pass for the extra closers."},
+            {"type": "System design", "prompt": "Design a news feed. What breaks first at scale?",
+             "answer": "Fan-out on write dies on celebrity accounts. Hybrid: push for normal "
+                       "accounts, pull for high-follower ones, merged at read time."},
+            {"type": "Behavioural", "prompt": "Tell me about a project you shipped that you "
+             "would build differently now.",
+             "answer": "Name the specific trade-off you would reverse and why the original "
+                       "call was reasonable at the time."},
+        ],
+    },
+    {
+        "slug": "netflix",
+        "name": "Netflix",
+        "sector": "Product",
+        "difficulty": "Hard",
+        "focus": ["Systems", "Judgement", "Ownership"],
+        "rounds": ["Recruiter screen", "Technical screen", "On-site loop"],
+        "blurb": "Small teams and unusually senior expectations — interviews probe judgement "
+                 "and independence at least as hard as they probe algorithms.",
+        "questions": [
+            {"type": "Coding", "prompt": "Design a rate limiter allowing N requests per rolling "
+             "minute per user.",
+             "answer": "Sliding-window counter with a timestamp deque per user, or two fixed "
+                       "buckets weighted by position in the window for O(1) memory."},
+            {"type": "Systems", "prompt": "A video starts buffering for 2% of viewers in one "
+             "region. How do you investigate?",
+             "answer": "Segment before theorising - ISP, device, CDN edge, title. A regional "
+                       "2% almost always isolates to one edge or one encoding profile."},
+            {"type": "Behavioural", "prompt": "Describe a decision you made without your "
+             "manager's input.",
+             "answer": "They want the reasoning and the follow-up, not just the outcome."},
+        ],
+    },
+    {
+        "slug": "google",
+        "name": "Google",
+        "sector": "Product",
+        "difficulty": "Hard",
+        "focus": ["Algorithms", "Complexity analysis", "Design"],
+        "rounds": ["Phone screen", "On-site loop", "Team match", "Hiring committee"],
+        "blurb": "Expect to justify complexity out loud and handle a follow-up that invalidates "
+                 "your first approach. The committee reads notes, not vibes.",
+        "questions": [
+            {"type": "Coding", "prompt": "Find the median of two sorted arrays in logarithmic "
+             "time.",
+             "answer": "Binary search the partition point on the shorter array so the left "
+                       "halves together hold exactly half the elements."},
+            {"type": "Design", "prompt": "Design an autocomplete service for a search box.",
+             "answer": "Trie with top-k cached at each node, warmed offline. The interesting "
+                       "half is invalidation and per-user personalisation, not the trie."},
+            {"type": "Technical", "prompt": "When is an amortised O(1) operation a bad guarantee "
+             "to rely on?",
+             "answer": "When tail latency matters - a resize that occasionally takes O(n) is "
+                       "fine on average and unacceptable inside a request budget."},
+        ],
+    },
+    {
+        "slug": "capgemini",
+        "name": "Capgemini",
+        "sector": "IT Services",
+        "difficulty": "Easy",
+        "focus": ["Aptitude", "Pseudocode", "English"],
+        "rounds": ["Game-based aptitude", "Pseudocode test", "Technical interview", "HR interview"],
+        "blurb": "The pseudocode round trips people who only ever write in one language — it is "
+                 "language-agnostic and tests reading more than writing.",
+        "questions": [
+            {"type": "Pseudocode", "prompt": "What does a loop running i from 1 to n printing "
+             "i*(i+1)/2 output for n = 5?",
+             "answer": "1, 3, 6, 10, 15 — the triangular numbers."},
+            {"type": "Aptitude", "prompt": "A works twice as fast as B. Together they finish in "
+             "12 days. How long would A take alone?",
+             "answer": "18 days. A's rate is 2x B's, so combined 3x = 1/12, giving A = 1/18."},
+            {"type": "HR", "prompt": "Are you open to relocating and to a non-technical role "
+             "initially?",
+             "answer": "Answer honestly — a reluctant yes here reads worse than a clear no."},
+        ],
+    },
+    {
+        "slug": "ibm",
+        "name": "IBM",
+        "sector": "IT Services",
+        "difficulty": "Moderate",
+        "focus": ["Cognitive tests", "Coding", "Cloud basics"],
+        "rounds": ["Cognitive assessment", "Coding test", "Technical interview", "HR interview"],
+        "blurb": "The cognitive round is adaptive and timed per question, so speed is scored "
+                 "directly; the technical half leans on cloud and data fundamentals.",
+        "questions": [
+            {"type": "Coding", "prompt": "Given a log stream, find the first non-repeating entry "
+             "in a single pass.",
+             "answer": "Ordered map of counts, then scan it once for the first count of 1."},
+            {"type": "Technical", "prompt": "What is the difference between containers and "
+             "virtual machines, and when do you still want a VM?",
+             "answer": "Containers share the host kernel; VMs bring their own. VMs remain the "
+                       "answer for a different OS or a hard isolation boundary."},
+            {"type": "HR", "prompt": "Why IBM rather than a startup?",
+             "answer": "A concrete answer — scale of data, client access, research arm — beats "
+                       "anything about stability alone."},
+        ],
+    },
+    {
+        "slug": "github",
+        "name": "GitHub",
+        "sector": "Product",
+        "difficulty": "Moderate",
+        "focus": ["APIs", "Git internals", "Collaboration"],
+        "rounds": ["Recruiter screen", "Technical interview", "Take-home or pairing", "Team fit"],
+        "blurb": "Remote-first and asynchronous, so written communication is assessed on its "
+                 "own; expect questions about how you work, not just what you know.",
+        "questions": [
+            {"type": "Technical", "prompt": "What actually happens during a git rebase, and why "
+             "can it lose work that a merge would not?",
+             "answer": "It replays commits onto a new base, creating new hashes. Anything not "
+                       "committed, and any shared history others already pulled, is at risk."},
+            {"type": "API", "prompt": "Design pagination for an API returning millions of rows. "
+             "Why is OFFSET a poor choice?",
+             "answer": "OFFSET scans and discards, so cost grows with depth, and rows shift "
+                       "under concurrent writes. Cursor on a stable sort key instead."},
+            {"type": "Collaboration", "prompt": "How do you review a 2,000-line pull request?",
+             "answer": "Ask for it to be split. If it cannot be, review by commit and start "
+                       "with the interfaces."},
+        ],
+    },
+    {
+        "slug": "anthropic",
+        "name": "Anthropic",
+        "sector": "Product",
+        "difficulty": "Hard",
+        "focus": ["Systems", "Reasoning", "Safety thinking"],
+        "rounds": ["Recruiter screen", "Technical screen", "On-site loop", "Values interview"],
+        "blurb": "Interviews favour clear reasoning under uncertainty over recall, and the "
+                 "values round is a real evaluation rather than a formality.",
+        "questions": [
+            {"type": "Coding", "prompt": "Stream a large file and report the top-k most frequent "
+             "lines without loading it all into memory.",
+             "answer": "Counting pass with a bounded map plus a size-k min-heap; if the key "
+                       "space is too large, shard by hash across passes."},
+            {"type": "Systems", "prompt": "A batch job is 10x slower in production than in "
+             "staging on the same code. Where do you look?",
+             "answer": "Data shape before code - cardinality, skew, and cache hit rate. Equal "
+                       "code on unequal data is the usual answer."},
+            {"type": "Reasoning", "prompt": "You cannot fully test a change before shipping it. "
+             "How do you decide whether to ship?",
+             "answer": "Reason about blast radius and reversibility, not confidence. A cheap "
+                       "rollback justifies far less certainty than a one-way door."},
         ],
     },
 ]
