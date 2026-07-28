@@ -2228,3 +2228,152 @@ body {
     border-radius: var(--tblr-border-radius) var(--tblr-border-radius) 0 0;
     background: var(--tblr-bg-surface-secondary);
 }
+
+/* --------------------------------------------------------------------------
+   LinkedIn optimizer
+   -------------------------------------------------------------------------- */
+
+/* The NEW bubble. Pill rather than a dot so it reads at a glance in the nav,
+   and it rides the nav link's baseline instead of pushing the row taller. */
+.badge-new {
+    display: inline-block;
+    margin-left: .35rem;
+    padding: .1rem .4rem;
+    border-radius: 999px;
+    background: var(--tblr-primary);
+    color: #fff;
+    font-size: .5625rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    line-height: 1.5;
+    vertical-align: middle;
+    text-transform: uppercase;
+}
+
+:root[data-bs-theme="dark"] .badge-new { background: #8b7cf6; color: #0b0f1a; }
+
+.navbar-nav .nav-link { display: inline-flex; align-items: center; }
+
+/* Score ring: one conic gradient driven by --score, so the drawing cannot
+   drift from the number printed inside it. */
+.score-ring {
+    --score: 0;
+    position: relative;
+    width: 9rem;
+    height: 9rem;
+    margin: 0 auto;
+    border-radius: 50%;
+    background: conic-gradient(
+        var(--tblr-primary) calc(var(--score) * 1%),
+        var(--tblr-border-color) 0
+    );
+    display: grid;
+    place-items: center;
+}
+
+.score-ring::after {
+    content: '';
+    position: absolute;
+    inset: .75rem;
+    border-radius: 50%;
+    background: var(--tblr-bg-surface);
+}
+
+.score-ring-value {
+    position: relative;
+    z-index: 1;
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -.03em;
+}
+
+.score-ring-value small { font-size: .9rem; font-weight: 600; }
+
+:root[data-bs-theme="dark"] .score-ring {
+    background: conic-gradient(#a78bfa calc(var(--score) * 1%), var(--tblr-border-color) 0);
+}
+
+.score-grade { font-weight: 700; font-size: 1.05rem; }
+
+.check-row {
+    position: relative;
+    padding-left: 1.4rem;
+    font-size: .875rem;
+    line-height: 1.5;
+    margin-bottom: .375rem;
+    color: var(--tblr-secondary);
+}
+
+.check-row::before {
+    position: absolute;
+    left: 0;
+    top: -.05rem;
+    font-weight: 700;
+}
+
+.check-bad::before { content: '×'; color: var(--tblr-red); font-size: 1.1rem; }
+.check-good::before { content: '✓'; color: var(--tblr-green); }
+
+.keyword-cloud { display: flex; flex-wrap: wrap; gap: .3rem; }
+
+.keyword-chip {
+    padding: .15rem .55rem;
+    border-radius: 999px;
+    border: 1px solid var(--tblr-border-color);
+    background: var(--tblr-bg-surface-secondary);
+    font-size: .8125rem;
+}
+
+.keyword-chip-ok {
+    border-color: transparent;
+    background: var(--tblr-green-lt);
+    color: var(--tblr-green);
+}
+
+.paste-block {
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius);
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.paste-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: .4rem .5rem .4rem .875rem;
+    background: var(--tblr-bg-surface-secondary);
+    font-size: .6875rem;
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--tblr-secondary);
+}
+
+.paste-body {
+    padding: .875rem;
+    font-size: .9375rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.metric-list { display: grid; gap: .875rem; }
+
+.metric-row { display: flex; gap: .75rem; align-items: flex-start; }
+
+.metric-weight {
+    flex-shrink: 0;
+    min-width: 2rem;
+    height: 2rem;
+    display: grid;
+    place-items: center;
+    border-radius: .5rem;
+    background: var(--tblr-primary-lt);
+    color: var(--tblr-primary);
+    font-weight: 700;
+    font-size: .8125rem;
+}
+
+:root[data-bs-theme="dark"] .metric-weight { color: #a78bfa; }

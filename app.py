@@ -27,6 +27,7 @@ from xhtml2pdf import pisa
 
 import adminstore
 import applykit
+import linkedinopt
 import prepbank
 import sitemedia
 import jobsources
@@ -2222,3 +2223,123 @@ def run_code():
         "output": output.strip() or '(no output)',
         "time": result.get('time'),
     })
+
+
+# --- LINKEDIN OPTIMISER ----------------------------------------------------
+
+def _linkedin_fallback(profile, report):
+    """
+    Rewrites built from the report alone, with no model involved.
+
+    Used when generation is unavailable, because a user who came for paste-able
+    updates should not leave with an error message. These are scaffolds with
+    the user's own missing keywords slotted in - honest about being a starting
+    point rather than a finished draft.
+    """
+    missing = report['missing']
+    top = [w.title() for w in missing[:3]] or ['your specialism']
+    role = (profile.get('headline') or 'Your role').split('|')[0].strip()
+
+    return {
+        "headline": f"{role} | {', '.join(top)} | [the outcome you are known for]",
+        "about": (
+            f"I [what you do] for [who you do it for].\n\n"
+            f"Over the last [X] years I have [achievement with a number], "
+            f"[second achievement with a number], and [third].\n\n"
+            f"I work mainly with {', '.join(missing[:8]) or 'your core tools'}.\n\n"
+            f"I am open to [the roles you want] — reach me at [your email]."
+        ),
+        "bullets": [
+            "[Action verb] [what you built or changed], [the number it moved].",
+            "[Action verb] [system or process], cutting [metric] by [X]%.",
+            "[Action verb] [initiative], delivering [outcome] for [who benefited].",
+        ],
+        "skills": missing[:15],
+        "generated": False,
+    }
+
+
+def _linkedin_rewrites(profile, report):
+    """
+    Paste-ready rewrites for the sections that scored worst.
+
+    Wording is a judgement call, so the model writes it - but it is always
+    shown to the user to check before it goes near their profile, and if
+    generation is unavailable for any reason the deterministic scaffolds above
+    are returned instead of an error.
+    """
+    fallback = _linkedin_fallback(profile, report)
+    if openrouter_client is None:
+        fallback['note'] = ("Generated from your report without AI — no text generation key "
+                            "is configured. Fill in the bracketed parts.")
+        return fallback
+
+    missing = ', '.join(report['missing'][:12]) or 'the terms in your target roles'
+    prompt = f"""You are rewriting parts of a LinkedIn profile. Reply with JSON only.
+
+Current headline: {profile.get('headline', '')[:400]}
+Current about: {profile.get('about', '')[:1500]}
+Experience bullets: {profile.get('experience', '')[:1500]}
+Target roles / job description: {profile.get('target', '')[:1500]}
+Keywords currently missing from the profile: {missing}
+
+Return this exact JSON shape:
+{{
+  "headline": "one headline under 220 characters, segmented with | , working in the missing keywords naturally",
+  "about": "a first-person About section of 900-1300 characters, concrete, ending with how to reach them",
+  "bullets": ["3 to 5 rewritten experience bullets, each starting with an action verb and containing a number"],
+  "skills": ["up to 15 skills to add, drawn from the missing keywords"]
+}}
+
+Do not invent employers, job titles, dates or metrics that are not present above.
+Where a number is needed but unknown, write it as [X] for the user to fill in."""
+
+    try:
+        data = json.loads(_openrouter_generate(prompt, json_mode=True))
+        return {
+            "headline": (data.get('headline') or '').strip() or fallback['headline'],
+            "about": (data.get('about') or '').strip() or fallback['about'],
+            "bullets": [b.strip() for b in (data.get('bullets') or []) if b and b.strip()]
+                       or fallback['bullets'],
+            "skills": [s.strip() for s in (data.get('skills') or []) if s and s.strip()]
+                      or fallback['skills'],
+            "generated": True,
+        }
+    except Exception as e:
+        fallback['note'] = (f"Text generation is unavailable right now ({type(e).__name__}), "
+                            f"so these are built from your report instead. The score above is "
+                            f"unaffected — it never uses AI.")
+        return fallback
+
+
+@app.route('/linkedin', methods=['GET', 'POST'])
+def linkedin_optimizer():
+    """
+    Public: overall score and the section breakdown.
+    Signed in: the specific fixes and paste-ready rewrites as well.
+
+    The scoring is identical either way - a guest sees a real number, not a
+    teaser computed differently from the paid one.
+    """
+    if request.method != 'POST':
+        return render_template('linkedin.html', report=None, profile={},
+                               metrics=linkedinopt.WEIGHTS)
+
+    profile = {
+        'headline': request.form.get('headline', ''),
+        'about': request.form.get('about', ''),
+        'experience': request.form.get('experience', ''),
+        'skills': request.form.get('skills', ''),
+        'target': request.form.get('target', ''),
+    }
+
+    if not any(v.strip() for v in profile.values()):
+        flash('Paste at least your headline and About section to get a score.', 'error')
+        return render_template('linkedin.html', report=None, profile=profile,
+                               metrics=linkedinopt.WEIGHTS)
+
+    report = linkedinopt.analyse(profile)
+    rewrites = _linkedin_rewrites(profile, report) if session.get('user_id') else None
+
+    return render_template('linkedin.html', report=report, profile=profile,
+                           rewrites=rewrites, metrics=linkedinopt.WEIGHTS)

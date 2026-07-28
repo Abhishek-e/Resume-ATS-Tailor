@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+{% set active_page = "linkedin" %}
+{% block title %}LinkedIn Optimizer - {{ site.app_name }}{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <h2 class="page-title">
+                    LinkedIn Optimizer
+                    <span class="badge badge-new ms-2">NEW</span>
+                </h2>
+                <div class="text-secondary mt-1">
+                    Score your profile against the roles you want, then paste the fixes straight in.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if report %}
+    <div class="row row-cards mb-3">
+        <div class="col-12 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    {# Ring is drawn from the score, so it cannot disagree with the number. #}
+                    <div class="score-ring" style="--score: {{ report.overall }};">
+                        <span class="score-ring-value">{{ report.overall }}<small>%</small></span>
+                    </div>
+                    <div class="score-grade mt-2">{{ report.grade }}</div>
+                    <div class="text-secondary small mt-1">
+                        {{ report.issue_count }} thing{{ '' if report.issue_count == 1 else 's' }} to fix
+                        &middot; {{ report.win_count }} already working
+                    </div>
+                    {% if not report.has_target %}
+                        <div class="alert alert-warning mt-3 mb-0 text-start">
+                            No target role pasted, so the keyword score is a placeholder.
+                            Add a job description for a real match figure.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-8">
+            <div class="card h-100">
+                <div class="card-header"><h3 class="card-title">Where the points went</h3></div>
+                <div class="card-body">
+                    <div class="bar-chart" role="table">
+                        {% for section in report.breakdown %}
+                            <div class="bar-row" role="row">
+                                <div class="bar-name" role="cell">{{ section.label }}</div>
+                                <div class="bar-track" role="cell">
+                                    <div class="bar-fill" style="width: {{ section.percent }}%;"></div>
+                                </div>
+                                <div class="bar-value" role="cell">
+                                    {{ section.earned }}<span class="bar-pct">/{{ section.weight }}</span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <p class="text-secondary small mb-0 mt-3">
+                        Weakest section first. Every point traces to a rule, not to a guess —
+                        the same profile always scores the same.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if session.user_id %}
+        <!-- Full report -->
+        <div class="row row-cards mb-3">
+            <div class="col-12 col-lg-7">
+                <div class="card h-100">
+                    <div class="card-header"><h3 class="card-title">Point-by-point</h3></div>
+                    <div class="list-group list-group-flush">
+                        {% for section in report.breakdown %}
+                            <div class="list-group-item">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <strong class="flex-fill">{{ section.label }}</strong>
+                                    <span class="badge {% if section.percent >= 70 %}bg-green-lt{% elif section.percent >= 40 %}bg-yellow-lt{% else %}bg-red-lt{% endif %}">
+                                        {{ section.percent }}%
+                                    </span>
+                                </div>
+                                {% for issue in section.issues %}
+                                    <div class="check-row check-bad">{{ issue }}</div>
+                                {% endfor %}
+                                {% for win in section.wins %}
+                                    <div class="check-row check-good">{{ win }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-5">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h3 class="card-title">Keywords to work in</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if report.missing %}
+                            <p class="text-secondary">
+                                Present in your target roles, absent from your profile.
+                            </p>
+                            <div class="keyword-cloud" id="missing-keywords">
+                                {% for word in report.missing %}
+                                    <span class="keyword-chip">{{ word }}</span>
+                                {% endfor %}
+                            </div>
+                            <button type="button" class="btn btn-sm btn-ghost-secondary mt-3"
+                                    data-copy-target="missing-keywords">Copy all</button>
+                        {% else %}
+                            <p class="text-secondary mb-0">
+                                Nothing missing — your profile already covers the target wording.
+                            </p>
+                        {% endif %}
+
+                        {% if report.covered %}
+                            <hr>
+                            <p class="text-secondary mb-2">Already covered</p>
+                            <div class="keyword-cloud">
+                                {% for word in report.covered[:20] %}
+                                    <span class="keyword-chip keyword-chip-ok">{{ word }}</span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Paste-ready rewrites -->
+        {% if rewrites %}
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Paste-ready updates</h3>
+                    {% if rewrites.generated %}
+                        <span class="text-secondary small ms-auto">
+                            Drafted for you — read before pasting.
+                        </span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if rewrites.note %}
+                        <div class="alert alert-warning">{{ rewrites.note }}</div>
+                    {% endif %}
+                    {% if true %}
+                        {% if rewrites.headline %}
+                            <div class="paste-block">
+                                <div class="paste-head">
+                                    <span>Headline</span>
+                                    <button type="button" class="btn btn-sm btn-ghost-secondary"
+                                            data-copy-target="paste-headline">Copy</button>
+                                </div>
+                                <div class="paste-body" id="paste-headline">{{ rewrites.headline }}</div>
+                            </div>
+                        {% endif %}
+
+                        {% if rewrites.about %}
+                            <div class="paste-block">
+                                <div class="paste-head">
+                                    <span>About</span>
+                                    <button type="button" class="btn btn-sm btn-ghost-secondary"
+                                            data-copy-target="paste-about">Copy</button>
+                                </div>
+                                <div class="paste-body" id="paste-about">{{ rewrites.about }}</div>
+                            </div>
+                        {% endif %}
+
+                        {% if rewrites.bullets %}
+                            <div class="paste-block">
+                                <div class="paste-head">
+                                    <span>Experience bullets</span>
+                                    <button type="button" class="btn btn-sm btn-ghost-secondary"
+                                            data-copy-target="paste-bullets">Copy</button>
+                                </div>
+                                <div class="paste-body" id="paste-bullets">{% for b in rewrites.bullets %}• {{ b }}
+{% endfor %}</div>
+                            </div>
+                        {% endif %}
+
+                        {% if rewrites.skills %}
+                            <div class="paste-block">
+                                <div class="paste-head">
+                                    <span>Skills to add</span>
+                                    <button type="button" class="btn btn-sm btn-ghost-secondary"
+                                            data-copy-target="paste-skills">Copy</button>
+                                </div>
+                                <div class="paste-body" id="paste-skills">{{ rewrites.skills|join(', ') }}</div>
+                            </div>
+                        {% endif %}
+
+                        <p class="text-secondary small mb-0 mt-3">
+                            Anything shown as [X] is a number only you know — fill it in rather
+                            than posting it as-is.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+
+    {% else %}
+        <!-- Guest: the score is real, the fixes are not shown -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <h3 class="mb-2">Your overview</h3>
+                <p class="text-secondary">
+                    {{ report.issue_count }} specific problem{{ '' if report.issue_count == 1 else 's' }}
+                    found across {{ report.breakdown|length }} sections, and
+                    {{ report.missing|length }} keyword{{ '' if report.missing|length == 1 else 's' }}
+                    from your target roles that appear nowhere on your profile.
+                    Your weakest section is <strong>{{ report.breakdown[0].label }}</strong>
+                    at {{ report.breakdown[0].percent }}%.
+                </p>
+                <div class="alert alert-info mb-0">
+                    <strong>Log in for the full report.</strong>
+                    You get every issue listed individually, the missing keywords, and
+                    rewritten headline, About and bullets you can paste straight into LinkedIn.
+                </div>
+                <div class="btn-list mt-3">
+                    <a href="{{ url_for('login', next=url_for('linkedin_optimizer')) }}"
+                       class="btn btn-primary">Log in for the full report</a>
+                    <a href="{{ url_for('register') }}" class="btn btn-ghost-secondary">Create an account</a>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endif %}
+
+<!-- The form -->
+<div class="row row-cards">
+    <div class="col-12 col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">{{ 'Score again' if report else 'Paste your profile' }}</h3>
+            </div>
+            <form method="POST" class="card-body">
+                <p class="text-secondary">
+                    LinkedIn blocks automated reading of profiles, so paste the text rather than
+                    a link — open your profile, copy each section across.
+                </p>
+
+                <div class="mb-3">
+                    <label class="form-label" for="li-headline">Headline</label>
+                    <input type="text" id="li-headline" name="headline" class="form-control"
+                           value="{{ profile.headline or '' }}"
+                           placeholder="Backend Engineer | Python & Postgres | Payments at scale">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="li-about">About</label>
+                    <textarea id="li-about" name="about" class="form-control" rows="5"
+                              placeholder="Your About section, as it reads today.">{{ profile.about or '' }}</textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="li-experience">Experience bullets</label>
+                    <textarea id="li-experience" name="experience" class="form-control" rows="6"
+                              placeholder="One bullet per line, from your recent roles.">{{ profile.experience or '' }}</textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="li-skills">Skills</label>
+                    <textarea id="li-skills" name="skills" class="form-control" rows="2"
+                              placeholder="Comma separated, as listed on your profile.">{{ profile.skills or '' }}</textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="li-target">Target roles</label>
+                    <textarea id="li-target" name="target" class="form-control" rows="5"
+                              placeholder="Paste one to three job descriptions you want to be found for.">{{ profile.target or '' }}</textarea>
+                    <div class="form-hint">
+                        The keyword score is measured against this. Without it, that section
+                        cannot be scored honestly.
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Score my profile</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header"><h3 class="card-title">What is measured</h3></div>
+            <div class="card-body">
+                <p class="text-secondary">
+                    100 points, weighted by how much each part affects whether a recruiter's
+                    search finds you.
+                </p>
+                <div class="metric-list">
+                    <div class="metric-row">
+                        <span class="metric-weight">{{ metrics.keywords }}</span>
+                        <div>
+                            <strong>Keyword match</strong>
+                            <div class="text-secondary small">
+                                How much of your target roles' wording appears anywhere on the
+                                profile. Weighted highest because it decides whether you surface
+                                in search at all.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-weight">{{ metrics.experience }}</span>
+                        <div>
+                            <strong>Experience</strong>
+                            <div class="text-secondary small">
+                                Bullet count, how many carry a number, and how many open with an
+                                action verb.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-weight">{{ metrics.headline }}</span>
+                        <div>
+                            <strong>Headline</strong>
+                            <div class="text-secondary small">
+                                Length against the 220-character limit, target keywords, and
+                                whether it is segmented enough to scan.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-weight">{{ metrics.about }}</span>
+                        <div>
+                            <strong>About</strong>
+                            <div class="text-secondary small">
+                                Length, first person, keyword coverage, and whether it ends with
+                                a way to make contact.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-weight">{{ metrics.skills }}</span>
+                        <div>
+                            <strong>Skills</strong>
+                            <div class="text-secondary small">
+                                How many of the 50 slots are used, and how many match your
+                                targets.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    document.querySelectorAll('[data-copy-target]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var source = document.getElementById(btn.dataset.copyTarget);
+            if (!source) { return; }
+
+            // Keyword clouds are chips; everything else is already plain text.
+            var chips = source.querySelectorAll('.keyword-chip');
+            var text = chips.length
+                ? Array.prototype.map.call(chips, function (c) { return c.textContent.trim(); }).join(', ')
+                : source.textContent.trim();
+
+            var label = btn.textContent;
+            navigator.clipboard.writeText(text).then(function () {
+                btn.textContent = 'Copied';
+                setTimeout(function () { btn.textContent = label; }, 1600);
+            }).catch(function () {
+                btn.textContent = 'Press Ctrl+C';
+                var range = document.createRange();
+                range.selectNodeContents(source);
+                var sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                setTimeout(function () { btn.textContent = label; }, 2500);
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}

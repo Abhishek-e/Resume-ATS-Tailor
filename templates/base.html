@@ -110,6 +110,12 @@
                             <li class="nav-item {% if active_page == 'preparation' %}active{% endif %}">
                                 <a class="nav-link" href="{{ url_for('preparation') }}">Preparation</a>
                             </li>
+                            <li class="nav-item {% if active_page == 'linkedin' %}active{% endif %}">
+                                <a class="nav-link" href="{{ url_for('linkedin_optimizer') }}">
+                                    LinkedIn
+                                    <span class="badge badge-new">NEW</span>
+                                </a>
+                            </li>
                             <li class="nav-item {% if active_page == 'cover_letter' %}active{% endif %}">
                                 <a class="nav-link" href="{{ url_for('generate_cover_letter') }}">Cover Letter</a>
                             </li>
