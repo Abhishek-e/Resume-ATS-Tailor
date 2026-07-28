@@ -2056,3 +2056,78 @@ body {
     text-transform: uppercase;
     color: var(--tblr-secondary);
 }
+
+/* --------------------------------------------------------------------------
+   404
+   Figure on one side pointing across at the home button, copy on the other.
+   Below md the arm would be pointing at nothing, so the art moves above the
+   copy and shrinks.
+   -------------------------------------------------------------------------- */
+
+.error-page {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(1rem, 5vw, 3.5rem);
+    padding: 3rem 0 4rem;
+    min-height: 60vh;
+}
+
+.error-art { flex: 0 0 auto; width: min(260px, 60vw); }
+.error-art svg { width: 100%; height: auto; display: block; }
+
+/* Palette keyed to the theme tokens, so the figure re-colours with the rest
+   of the site instead of sitting on a fixed white background. */
+.err-shadow { fill: var(--tblr-border-color); opacity: .55; }
+.err-dark { fill: var(--tblr-body-color); opacity: .85; }
+.err-accent { fill: var(--tblr-primary); }
+.err-accent-dark { fill: var(--tblr-primary); opacity: .78; }
+.err-skin { fill: #f0b48a; }
+.err-line { stroke: var(--tblr-body-color); stroke-width: 3; stroke-linecap: round; opacity: .85; }
+
+:root[data-bs-theme="dark"] .err-accent { fill: #8b7cf6; }
+:root[data-bs-theme="dark"] .err-accent-dark { fill: #8b7cf6; opacity: .8; }
+
+.error-copy { flex: 1 1 22rem; max-width: 34rem; }
+
+.error-code {
+    font-size: clamp(3rem, 9vw, 5rem);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -.04em;
+    color: var(--tblr-primary);
+    margin: 0 0 .25rem;
+}
+
+:root[data-bs-theme="dark"] .error-code { color: #a78bfa; }
+
+.error-title {
+    font-size: clamp(1.4rem, 3.4vw, 2rem);
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.2;
+    margin: 0 0 .75rem;
+}
+
+.error-sub {
+    color: var(--tblr-secondary);
+    font-size: 1rem;
+    line-height: 1.6;
+    margin: 0;
+    max-width: 46ch;
+}
+
+.error-links {
+    margin-top: 1.25rem;
+    font-size: .875rem;
+    color: var(--tblr-secondary);
+}
+
+@media (max-width: 767.98px) {
+    .error-page { flex-direction: column; text-align: center; padding-top: 2rem; }
+    .error-art { width: min(190px, 52vw); }
+    .error-copy { flex: 1 1 auto; }
+    .error-sub { margin-inline: auto; }
+    .error-page .btn-list { justify-content: center; }
+}

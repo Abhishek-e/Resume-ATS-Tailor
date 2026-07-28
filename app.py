@@ -2057,3 +2057,15 @@ def admin_questions_upload():
         flash('That sheet had no rows to import.', 'error')
 
     return redirect(url_for('admin_questions'))
+
+
+@app.errorhandler(404)
+def page_not_found(_e):
+    """
+    Any unknown route, plus every abort(404) already in the app.
+
+    The status code is preserved deliberately - a pretty page returned as 200
+    tells crawlers and monitoring the URL is fine, which is how dead links get
+    indexed.
+    """
+    return render_template('404.html'), 404

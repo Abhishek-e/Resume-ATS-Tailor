@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Page not found - {{ site.app_name }}{% endblock %}
+
+{% block content %}
+{#
+  The figure is drawn inline rather than fetched: no external request to fail,
+  it inherits the theme through currentColor and the Tabler tokens, and it can
+  be aimed deliberately - the arm points across at the home button, which is
+  the whole idea.
+#}
+<section class="error-page">
+    <div class="error-art" aria-hidden="true">
+        <svg viewBox="0 0 260 300" role="img" xmlns="http://www.w3.org/2000/svg">
+            <!-- ground -->
+            <ellipse class="err-shadow" cx="112" cy="278" rx="74" ry="10"/>
+
+            <!-- legs -->
+            <path class="err-dark" d="M92 196h20v66a10 10 0 0 1-20 0z"/>
+            <path class="err-dark" d="M120 196h20v66a10 10 0 0 1-20 0z"/>
+            <!-- shoes -->
+            <path class="err-accent" d="M84 262h28a8 8 0 0 1 8 8v4H84z"/>
+            <path class="err-accent" d="M112 262h28a8 8 0 0 1 8 8v4h-36z"/>
+
+            <!-- torso -->
+            <path class="err-accent" d="M78 118a38 38 0 0 1 38-38h4a38 38 0 0 1 38 38v62a12 12 0 0 1-12 12H90a12 12 0 0 1-12-12z"/>
+
+            <!-- left arm, resting -->
+            <rect class="err-accent-dark" x="70" y="122" width="18" height="66" rx="9"/>
+            <circle class="err-skin" cx="79" cy="192" r="10"/>
+
+            <!-- right arm, raised and pointing across at the button -->
+            <rect class="err-accent-dark" x="148" y="104" width="62" height="18" rx="9"/>
+            <!-- hand + extended index finger -->
+            <circle class="err-skin" cx="212" cy="113" r="13"/>
+            <rect class="err-skin" x="220" y="107" width="30" height="12" rx="6"/>
+
+            <!-- head -->
+            <circle class="err-skin" cx="118" cy="52" r="30"/>
+            <!-- hair -->
+            <path class="err-dark" d="M88 48a30 30 0 0 1 60 0 34 34 0 0 0-60 0z"/>
+            <!-- eyes -->
+            <circle class="err-dark" cx="108" cy="52" r="3.2"/>
+            <circle class="err-dark" cx="128" cy="52" r="3.2"/>
+            <!-- smile -->
+            <path class="err-line" d="M108 64a12 12 0 0 0 20 0" fill="none"/>
+            <!-- collar -->
+            <path class="err-dark" d="M104 82h28l-14 16z"/>
+        </svg>
+    </div>
+
+    <div class="error-copy">
+        <p class="error-code">404</p>
+        <h1 class="error-title">This page took a different career path</h1>
+        <p class="error-sub">
+            The address you tried doesn't exist here. Nothing is broken — that route
+            just isn't part of {{ site.app_name }}.
+        </p>
+
+        <div class="btn-list mt-3">
+            <a href="{{ url_for('home') }}" class="btn btn-primary btn-lg">Take me home</a>
+            <a href="{{ url_for('jobs') }}" class="btn btn-ghost-secondary btn-lg">Find jobs</a>
+        </div>
+
+        <p class="error-links">
+            Or try
+            <a href="{{ url_for('preparation') }}">Preparation</a>,
+            <a href="{{ url_for('generate_cv') }}">Generate CV</a> or
+            <a href="{{ url_for('plagiarism_checker') }}">Plagiarism Checker</a>.
+        </p>
+    </div>
+</section>
+{% endblock %}
