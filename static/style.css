@@ -114,10 +114,97 @@ body {
 
 .cards-section { padding: 1rem 0 3.5rem; }
 
+/* The track is a flex row now rather than an auto-fit grid: three per view
+   means the slide width has to be computed from the viewport, which a grid
+   with auto-fit cannot express. */
 .cards-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    display: flex;
     gap: 1.5rem;
+}
+
+.card-slider { position: relative; }
+
+.card-slider-head {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: .75rem;
+}
+
+.card-slider-controls { display: flex; gap: .5rem; }
+
+.card-slider-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    border: 1px solid var(--tblr-border-color);
+    background: var(--tblr-bg-surface);
+    color: var(--tblr-body-color);
+    cursor: pointer;
+    transition: background .2s, border-color .2s, opacity .2s;
+}
+
+.card-slider-btn:hover { border-color: var(--tblr-primary); color: var(--tblr-primary); }
+.card-slider-btn:disabled { opacity: .4; cursor: default; }
+
+:root[data-bs-theme="dark"] .card-slider-btn:hover { border-color: #a78bfa; color: #a78bfa; }
+
+/* Clip to the viewport; the track slides inside it. Padding keeps the cards'
+   hover lift and shadow from being sheared off at the edges. */
+.card-slider-viewport {
+    overflow: hidden;
+    padding: .5rem .25rem 1rem;
+    margin: -.5rem -.25rem -1rem;
+}
+
+.card-slider-track {
+    transition: transform .55s cubic-bezier(.4, 0, .2, 1);
+    will-change: transform;
+}
+
+/* Three across, with the gaps taken out of the share. */
+.card-slider-track > .card {
+    flex: 0 0 calc((100% - 3rem) / 3);
+    max-width: calc((100% - 3rem) / 3);
+}
+
+.card-slider-dots {
+    display: flex;
+    justify-content: center;
+    gap: .375rem;
+    margin-top: 1rem;
+}
+
+.card-slider-dot {
+    width: .5rem;
+    height: .5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: var(--tblr-border-color);
+    cursor: pointer;
+    transition: width .25s, background .25s;
+}
+
+.card-slider-dot.active { width: 1.5rem; background: var(--tblr-primary); }
+
+:root[data-bs-theme="dark"] .card-slider-dot.active { background: #a78bfa; }
+
+@media (max-width: 991.98px) {
+    .card-slider-track > .card {
+        flex: 0 0 calc((100% - 1.5rem) / 2);
+        max-width: calc((100% - 1.5rem) / 2);
+    }
+}
+
+@media (max-width: 575.98px) {
+    .card-slider-track > .card { flex: 0 0 100%; max-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .card-slider-track { transition: none; }
 }
 
 .cards-container .card {
