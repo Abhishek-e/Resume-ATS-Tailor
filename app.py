@@ -27,6 +27,7 @@ from xhtml2pdf import pisa
 import adminstore
 import applykit
 import prepbank
+import sitemedia
 import jobsources
 import jobstore
 import prepsets
@@ -158,6 +159,9 @@ def inject_site_context():
     return {
         'site': settings,
         'pending_announcements': unseen,
+        # slot -> URL, so a template never has to know whether an image was
+        # replaced or is still the shipped default.
+        'site_images': sitemedia.urls(db, url_for),
     }
 
 
@@ -1921,7 +1925,12 @@ def admin_settings():
         flash('Settings saved — they apply across the site immediately.', 'success')
         return redirect(url_for('admin_settings'))
 
-    return render_template('admin/settings.html', settings=adminstore.get_settings(db))
+    return render_template(
+        'admin/settings.html',
+        settings=adminstore.get_settings(db),
+        images=sitemedia.overview(db),
+        image_bytes=sitemedia.total_bytes(db),
+    )
 
 
 @app.route('/admin/profile', methods=['GET', 'POST'])
@@ -2069,3 +2078,68 @@ def page_not_found(_e):
     indexed.
     """
     return render_template('404.html'), 404
+
+
+@app.route('/media/<slot>')
+def site_media(slot):
+    """
+    Serves an uploaded landing-page image.
+
+    Cached hard and validated with an ETag: the URL carries the upload
+    timestamp, so a replacement busts the cache while an unchanged image is
+    answered with a 304 rather than the bytes.
+    """
+    entry = sitemedia.get(db, slot)
+    if entry is None:
+        return redirect(sitemedia.default_url(slot) or url_for('static', filename='style.css'))
+
+    data, content_type, etag = entry
+    if request.headers.get('If-None-Match') == etag:
+        return '', 304
+
+    response = send_file(io.BytesIO(data), mimetype=content_type)
+    response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    response.headers['ETag'] = etag
+    return response
+
+
+@app.route('/admin/images/<slot>', methods=['POST'])
+@admin_required
+def admin_images_upload(slot):
+    upload = request.files.get('image')
+    if not upload or not upload.filename:
+        flash('Choose an image to upload.', 'error')
+        return redirect(url_for('admin_settings'))
+
+    try:
+        saved = sitemedia.save(db, slot, upload.filename, upload.read())
+    except ValueError as e:
+        flash(str(e), 'error')
+        return redirect(url_for('admin_settings'))
+
+    flash(
+        f"{sitemedia.SLOTS[slot][0]} replaced — stored at {saved['width']}×{saved['height']}, "
+        f"{saved['bytes'] // 1024} KB (down from {saved['original_bytes'] // 1024} KB).",
+        'success')
+    return redirect(url_for('admin_settings'))
+
+
+@app.route('/admin/images/<slot>/delete', methods=['POST'])
+@admin_required
+def admin_images_delete(slot):
+    sitemedia.delete(db, slot)
+    flash(f'{sitemedia.SLOTS[slot][0]} reset to the default image, and the upload deleted.',
+          'success')
+    return redirect(url_for('admin_settings'))
+
+
+@app.route('/admin/images/prune', methods=['POST'])
+@admin_required
+def admin_images_prune():
+    removed, freed = sitemedia.prune(db)
+    if removed:
+        flash(f'Removed {removed} unused image{"" if removed == 1 else "s"}, '
+              f'freeing {freed // 1024} KB.', 'success')
+    else:
+        flash('Nothing to clean up — every stored image is in use.', 'success')
+    return redirect(url_for('admin_settings'))

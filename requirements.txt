@@ -13,3 +13,4 @@ pypdf
 requests
 feedparser
 openpyxl
+Pillow

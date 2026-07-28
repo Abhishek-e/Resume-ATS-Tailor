@@ -50,5 +50,87 @@
             </div>
         </div>
     </div>
+
+    <!-- Landing page images -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                <div>
+                    <h3 class="card-title mb-0">Home page images</h3>
+                    <div class="text-secondary small">
+                        {{ (image_bytes / 1024) | round | int }} KB stored across
+                        {{ images | selectattr('custom') | list | length }} replaced image{{ '' if (images | selectattr('custom') | list | length) == 1 else 's' }}.
+                    </div>
+                </div>
+                <form method="POST" action="{{ url_for('admin_images_prune') }}" class="ms-auto">
+                    <button type="submit" class="btn btn-sm btn-ghost-secondary">
+                        Clean up unused
+                    </button>
+                </form>
+            </div>
+
+            <div class="card-body">
+                <p class="text-secondary">
+                    Uploads are resized and re-compressed before they are stored, and replacing
+                    an image overwrites the old one rather than keeping both.
+                </p>
+
+                <div class="row row-cards">
+                    {% for image in images %}
+                        <div class="col-12 col-md-6 col-xl-4">
+                            <div class="card h-100">
+                                <img class="site-image-preview"
+                                     src="{{ site_images[image.slot] }}" alt="{{ image.label }}">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <strong class="flex-fill">{{ image.label }}</strong>
+                                        {% if image.custom %}
+                                            <span class="badge bg-green-lt">replaced</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary-lt">default</span>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="text-secondary small mb-2">
+                                        {% if image.custom %}
+                                            {{ image.width }}&times;{{ image.height }} &middot;
+                                            {{ (image.bytes / 1024) | round | int }} KB &middot;
+                                            {{ image.updated_at | admin_date }}
+                                        {% else %}
+                                            Shipped default (loaded from Unsplash).
+                                        {% endif %}
+                                    </div>
+
+                                    {# Two separate forms, side by side - upload posts a
+                                       file, delete posts nothing, and a form cannot
+                                       contain another. #}
+                                    <form method="POST"
+                                          action="{{ url_for('admin_images_upload', slot=image.slot) }}"
+                                          enctype="multipart/form-data">
+                                        <input type="file" name="image"
+                                               class="form-control form-control-sm mb-2"
+                                               accept="image/jpeg,image/png,image/webp,image/gif" required>
+                                        <button type="submit" class="btn btn-sm btn-primary">
+                                            {{ 'Replace' if image.custom else 'Upload' }}
+                                        </button>
+                                    </form>
+
+                                    {% if image.custom %}
+                                        <form method="POST" class="mt-2"
+                                              action="{{ url_for('admin_images_delete', slot=image.slot) }}"
+                                              onsubmit="return confirm('Delete this image and go back to the default?');">
+                                            <button type="submit" class="btn btn-sm btn-ghost-danger">
+                                                Delete &amp; restore default
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

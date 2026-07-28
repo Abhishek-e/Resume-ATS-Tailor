@@ -2131,3 +2131,13 @@ body {
     .error-sub { margin-inline: auto; }
     .error-page .btn-list { justify-content: center; }
 }
+
+/* --- admin: home page image manager -------------------------------------- */
+
+.site-image-preview {
+    width: 100%;
+    height: 9rem;
+    object-fit: cover;
+    border-radius: var(--tblr-border-radius) var(--tblr-border-radius) 0 0;
+    background: var(--tblr-bg-surface-secondary);
+}
