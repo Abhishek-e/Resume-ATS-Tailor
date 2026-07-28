@@ -66,6 +66,12 @@ services:
         sync: false
       - key: USAJOBS_USER_AGENT
         sync: false
+      # Optional. Enables Java / C / C++ on the practice desk by proxying to
+      # Judge0 CE (free tier on RapidAPI). JavaScript and Python run entirely
+      # in the browser and need nothing here.
+      - key: JUDGE0_RAPIDAPI_KEY
+        sync: false
+
       # Politeness delay between board requests during a refresh.
       - key: FETCH_DELAY_SECONDS
         value: "1.0"

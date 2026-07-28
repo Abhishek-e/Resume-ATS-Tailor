@@ -2,6 +2,7 @@ import io
 import json
 import os
 import re
+import requests
 from datetime import datetime, timezone
 from functools import wraps
 from urllib.parse import quote_plus
@@ -2143,3 +2144,81 @@ def admin_images_prune():
     else:
         flash('Nothing to clean up — every stored image is in use.', 'success')
     return redirect(url_for('admin_settings'))
+
+
+# --- code execution --------------------------------------------------------
+# JavaScript runs in a Web Worker and Python runs on Pyodide, both entirely in
+# the browser. Java and C need a compiler, which no browser has, so they go
+# through a sandboxed execution service. Judge0's free tier on RapidAPI is the
+# one that works without self-hosting; unset, the endpoint says so plainly
+# rather than failing in a way that looks like the code was wrong.
+JUDGE0_KEY = os.environ.get("JUDGE0_RAPIDAPI_KEY", "").strip()
+JUDGE0_HOST = os.environ.get("JUDGE0_HOST", "judge0-ce.p.rapidapi.com").strip()
+
+# Judge0 language ids for the versions its CE image ships.
+JUDGE0_LANGUAGES = {
+    "java": 62,     # OpenJDK 13
+    "c": 50,        # GCC 9.2
+    "cpp": 54,      # G++ 9.2
+}
+
+
+@app.route('/api/run', methods=['POST'])
+@login_required
+def run_code():
+    payload = request.get_json(silent=True) or {}
+    language = (payload.get('language') or '').lower()
+    source = payload.get('source') or ''
+
+    if language not in JUDGE0_LANGUAGES:
+        return jsonify({"error": f"No runner configured for {language}."}), 400
+    if not source.strip():
+        return jsonify({"error": "Nothing to run."}), 400
+    if len(source) > 64 * 1024:
+        return jsonify({"error": "That file is too large to run."}), 400
+
+    if not JUDGE0_KEY:
+        return jsonify({
+            "error": (
+                f"{language.upper()} needs a compiler, which browsers do not have. "
+                "Set JUDGE0_RAPIDAPI_KEY to enable it — Judge0 CE has a free tier on "
+                "RapidAPI. JavaScript and Python run here with no key at all."
+            )
+        }), 503
+
+    try:
+        response = requests.post(
+            f"https://{JUDGE0_HOST}/submissions",
+            params={"base64_encoded": "false", "wait": "true"},
+            headers={
+                "content-type": "application/json",
+                "x-rapidapi-key": JUDGE0_KEY,
+                "x-rapidapi-host": JUDGE0_HOST,
+            },
+            json={
+                "language_id": JUDGE0_LANGUAGES[language],
+                "source_code": source,
+                # Ceilings on the sandbox, not on us - a runaway submission
+                # should cost the service, not this request thread.
+                "cpu_time_limit": 5,
+                "wall_time_limit": 10,
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        result = response.json()
+    except Exception as e:
+        return jsonify({"error": f"The runner could not be reached: {e}"}), 502
+
+    # Judge0 splits the answer across streams depending on how it failed.
+    output = (result.get('stdout') or '')
+    if result.get('compile_output'):
+        output += ('\n' if output else '') + result['compile_output']
+    if result.get('stderr'):
+        output += ('\n' if output else '') + result['stderr']
+
+    return jsonify({
+        "status": (result.get('status') or {}).get('description', 'done'),
+        "output": output.strip() or '(no output)',
+        "time": result.get('time'),
+    })

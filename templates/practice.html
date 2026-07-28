@@ -130,11 +130,18 @@
         <div class="card h-100">
             <div class="card-header d-flex flex-wrap align-items-center gap-2">
                 <h3 class="card-title mb-0">Code</h3>
+                {# Grouped so it is obvious before pressing Run which languages
+                   execute locally and which need a compiler service. #}
                 <select class="form-select form-select-sm w-auto ms-auto" id="code-language">
-                    <option value="javascript">JavaScript</option>
-                    <option value="python">Python</option>
-                    <option value="java">Java</option>
-                    <option value="cpp">C++</option>
+                    <optgroup label="Runs in your browser">
+                        <option value="javascript">JavaScript</option>
+                        <option value="python">Python</option>
+                    </optgroup>
+                    <optgroup label="Needs a compiler">
+                        <option value="java">Java</option>
+                        <option value="c">C</option>
+                        <option value="cpp">C++</option>
+                    </optgroup>
                 </select>
                 <button type="button" class="btn btn-sm btn-primary" id="code-run">Run</button>
                 <button type="button" class="btn btn-sm btn-ghost-secondary" id="code-reset">Reset</button>
@@ -322,7 +329,8 @@
     var STARTERS = {
         javascript: '// Write your solution, then press Run.\n// console.log output appears below.\n\nfunction solve(input) {\n\n}\n\nconsole.log(solve());\n',
         python: '# Write your solution here.\n\ndef solve(data):\n    pass\n\nprint(solve(None))\n',
-        java: 'class Solution {\n    public static void main(String[] args) {\n\n    }\n}\n',
+        java: 'public class Main {\n    public static void main(String[] args) {\n\n    }\n}\n',
+        c: '#include <stdio.h>\n\nint main(void) {\n\n    return 0;\n}\n',
         cpp: '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n\n    return 0;\n}\n',
     };
 
@@ -356,20 +364,101 @@
         status.textContent = 'reset';
     });
 
+    // --- Python, via Pyodide in a worker ----------------------------------
+    // Real CPython compiled to WebAssembly: nothing is sent anywhere, and the
+    // worker can be terminated to stop a runaway loop. The runtime is a ~10 MB
+    // download on first use only, so the worker is kept alive between runs.
+    var pyWorker = null;
+
+    function runPython(code) {
+        status.textContent = 'starting Python…';
+        output.textContent = '';
+
+        if (!pyWorker) {
+            pyWorker = new Worker('{{ url_for('static', filename='pyrunner.js') }}');
+        }
+
+        var settled = false;
+        // Generous, because the first run includes fetching the runtime; a
+        // loop that never ends still gets cut off rather than hanging.
+        var timer = setTimeout(function () {
+            if (settled) { return; }
+            settled = true;
+            pyWorker.terminate();
+            pyWorker = null;
+            status.textContent = 'timed out';
+            output.textContent = 'Stopped after 60 seconds — check for an infinite loop, ' +
+                'or a slow first-time download of the Python runtime.';
+        }, 60000);
+
+        pyWorker.onmessage = function (e) {
+            var data = e.data;
+            if (data.type === 'status') {
+                if (!settled) { status.textContent = data.message; }
+                return;
+            }
+            if (settled) { return; }
+            settled = true;
+            clearTimeout(timer);
+
+            // Pyodide's batched stdout hands over one chunk per print()
+            // without the trailing newline, so they have to be rejoined - ''
+            // runs the lines together.
+            var text = (data.logs || []).join('\n');
+            if (!data.ok) {
+                text += (text ? '\n' : '') + data.error;
+                status.textContent = 'error';
+            } else {
+                status.textContent = 'ran without errors';
+            }
+            output.textContent = text || '(no output)';
+        };
+
+        pyWorker.onerror = function (err) {
+            if (settled) { return; }
+            settled = true;
+            clearTimeout(timer);
+            pyWorker = null;
+            status.textContent = 'error';
+            output.textContent = err.message || 'Could not start the Python runtime.';
+        };
+
+        pyWorker.postMessage(code);
+    }
+
+    // --- compiled languages, via the server -------------------------------
+    function runRemote(code) {
+        status.textContent = 'compiling…';
+        output.textContent = '';
+
+        fetch('{{ url_for('run_code') }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ language: language.value, source: code }),
+        })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+            .then(function (res) {
+                if (!res.ok) {
+                    status.textContent = 'unavailable';
+                    output.textContent = res.d.error || 'That language cannot be run here yet.';
+                    return;
+                }
+                status.textContent = res.d.status || 'done';
+                output.textContent = res.d.output || '(no output)';
+            })
+            .catch(function () {
+                status.textContent = 'error';
+                output.textContent = 'Could not reach the runner.';
+            });
+    }
+
     // JavaScript runs here, in a Worker: it has no DOM, no cookies and no
-    // access to this page, and a timeout kills an infinite loop. The other
-    // languages have no runner in the browser and say so rather than
-    // pretending to execute.
+    // access to this page, and a timeout kills an infinite loop.
     document.getElementById('code-run').addEventListener('click', function () {
         saveDraft();
-        if (language.value !== 'javascript') {
-            status.textContent = 'no in-browser runner';
-            output.textContent =
-                language.options[language.selectedIndex].text +
-                ' cannot be executed in the browser. Your code is saved — run it in your own ' +
-                'environment, or switch to JavaScript to run it here.';
-            return;
-        }
+
+        if (language.value === 'python') { runPython(editor.value); return; }
+        if (language.value !== 'javascript') { runRemote(editor.value); return; }
 
         status.textContent = 'running…';
         output.textContent = '';
