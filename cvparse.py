@@ -76,6 +76,19 @@ LOCATION_RE = re.compile(
 
 BULLET_CHARS = '•·◦‣▪–—*-‧'
 
+# Extracting text from a PDF hands back the "no glyph" box wherever the source
+# font could not draw a character. Sitting between two word characters it was a
+# hyphen - "data<box>driven"; anywhere else it was a bullet or other list
+# decoration, which the bullet handling below already knows how to strip. The
+# private-use range covers Word's Wingdings bullets.
+NOTDEF_CHARS = '■□�-'
+_NOTDEF_AS_HYPHEN_RE = re.compile(rf'(?<=\w)[{NOTDEF_CHARS}](?=\w)')
+_NOTDEF_RE = re.compile(rf'[{NOTDEF_CHARS}]')
+
+
+def _repair_glyphs(text):
+    return _NOTDEF_RE.sub('•', _NOTDEF_AS_HYPHEN_RE.sub('-', text))
+
 
 def _clean(line):
     return line.replace(' ', ' ').strip()
@@ -297,7 +310,7 @@ def parse_resume_text(text):
     Every value is a string, matching the form inputs one-for-one, so the front
     end can assign them without a translation layer.
     """
-    text = (text or '').replace('\r\n', '\n').replace('\r', '\n')
+    text = _repair_glyphs((text or '').replace('\r\n', '\n').replace('\r', '\n'))
     lines = text.split('\n')
     sections = _split_sections(lines)
 

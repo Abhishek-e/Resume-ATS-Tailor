@@ -29,6 +29,7 @@ import adminstore
 import applykit
 import cvparse
 import linkedinopt
+import pdfsafe
 import prepbank
 import resumetemplates
 import sitemedia
@@ -1069,7 +1070,7 @@ def _resume_catalogue():
 
 def _html_to_pdf_bytes(html):
     buf = io.BytesIO()
-    result = pisa.CreatePDF(io.StringIO(html), dest=buf)
+    result = pisa.CreatePDF(io.StringIO(pdfsafe.safe_text(html)), dest=buf)
     if result.err:
         raise RuntimeError("Failed to render PDF.")
     return buf.getvalue()
