@@ -20,6 +20,13 @@
     --rs-shadow-card: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
     --rs-shadow-lift: 0 18px 40px -18px rgba(15, 23, 42, .28), 0 2px 6px rgba(15, 23, 42, .05);
     --rs-ease: cubic-bezier(.22, 1, .36, 1);
+
+    /* Chrome typography. Outfit is a humanist geometric sans - formal enough
+       for a nav bar without the stiffness of a grotesque; Playfair carries the
+       wordmark. Both fall back to the local Geist stack if Google Fonts is
+       blocked, which only changes the shape, never the layout. */
+    --rs-font-nav: 'Outfit', var(--tblr-font-sans-serif);
+    --rs-font-brand: 'Playfair Display', Georgia, 'Times New Roman', serif;
 }
 
 body {
@@ -27,15 +34,70 @@ body {
     letter-spacing: -.005em;
 }
 
+/* Public menu bar. Scoped to the header so the admin sidebar - a different,
+   more utilitarian surface - keeps the body face. */
+.page > header.navbar,
+.page > header.navbar .nav-link,
+.page > header.navbar .btn {
+    font-family: var(--rs-font-nav);
+    letter-spacing: 0;
+}
+
+/* Weight 500 gives Outfit the presence Geist had at 400. The size stays on
+   Tabler's .875rem: at 15px the seven items wrap onto a second row at 1280. */
+.page > header.navbar .nav-link {
+    font-weight: 500;
+    /* Seven items plus the NEW badge want 728px at Tabler's 12px gutters,
+       against 690px of usable row at 1280 - so the labels were breaking mid
+       item ("Generate / CV"). 8px a side brings the row to 672px and every
+       label back onto one line. Narrower desktops still wrap, as before. */
+    padding-inline: .5rem;
+}
+
 .navbar-brand a {
+    font-family: var(--rs-font-brand);
     font-weight: 700;
     letter-spacing: .14em;
     font-size: 1.05rem;
     color: var(--tblr-body-color);
     text-decoration: none;
+    /* Glow. Two stacked shadows - a tight core and a wide bloom - so it reads
+       as light coming off the letters rather than a blur. Kept restrained on
+       light, where a halo on dark text muddies the strokes. */
+    text-shadow:
+        0 0 10px rgba(var(--tblr-primary-rgb), .30),
+        0 0 26px rgba(var(--tblr-primary-rgb), .18);
+    transition: text-shadow .25s var(--rs-ease), color .25s var(--rs-ease);
 }
 
-.navbar-brand a:hover { color: var(--tblr-primary); }
+.navbar-brand a:hover {
+    color: var(--tblr-primary);
+    text-shadow:
+        0 0 12px rgba(var(--tblr-primary-rgb), .48),
+        0 0 32px rgba(var(--tblr-primary-rgb), .28);
+}
+
+/* On dark the wordmark is near-white, so the glow can carry real intensity -
+   and it takes the lifted accent for the same contrast reason as .hero-script:
+   the brand primary sits at ~2.2:1 against the dark header. */
+:root[data-bs-theme="dark"] .navbar-brand a {
+    text-shadow:
+        0 0 8px rgba(167, 139, 250, .55),
+        0 0 22px rgba(167, 139, 250, .38),
+        0 0 44px rgba(167, 139, 250, .22);
+}
+
+:root[data-bs-theme="dark"] .navbar-brand a:hover {
+    color: #a78bfa;
+    text-shadow:
+        0 0 10px rgba(167, 139, 250, .75),
+        0 0 28px rgba(167, 139, 250, .5),
+        0 0 56px rgba(167, 139, 250, .3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .navbar-brand a { transition: none; }
+}
 
 .avatar {
     background: var(--tblr-primary);
@@ -2252,7 +2314,15 @@ body {
 
 :root[data-bs-theme="dark"] .badge-new { background: #8b7cf6; color: #0b0f1a; }
 
+/* Tabler positions a .badge inside a .nav-link absolutely, as a notification
+   dot pinned to the corner. This one is a label that belongs beside the word:
+   left absolute it overlapped the next menu item on desktop and flew to the
+   far right of the full-width row in the collapsed menu. */
 .navbar-nav .nav-link { display: inline-flex; align-items: center; }
+.navbar .navbar-nav .nav-link .badge-new {
+    position: static;
+    transform: none;
+}
 
 /* Score ring: one conic gradient driven by --score, so the drawing cannot
    drift from the number printed inside it. */

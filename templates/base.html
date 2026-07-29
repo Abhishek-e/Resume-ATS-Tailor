@@ -17,13 +17,15 @@
         })();
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/tabler/css/tabler.min.css') }}">
-    <!-- Script accent for hero headings. Body text stays on the local Geist
-         faces, so a blocked or slow Google Fonts only costs the accent, never
-         readability. display=swap keeps the fallback painted meanwhile. -->
+    <!-- Three display faces in one request: Dancing Script for hero accents,
+         Playfair Display for the wordmark, Outfit for the menu bar. Body text
+         stays on the local Geist faces, so a blocked or slow Google Fonts only
+         costs the chrome, never readability. display=swap keeps the fallback
+         painted meanwhile. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap">
+          href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Outfit:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
