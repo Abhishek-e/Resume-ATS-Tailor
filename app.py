@@ -1954,12 +1954,6 @@ def plagiarism_checker_download_pdf():
     )
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    debug_mode = os.environ.get("FLASK_DEBUG", "true").lower() == "true"
-    app.run(host="0.0.0.0", port=port, debug=debug_mode)
-
-
 # --- ADMIN PANEL -----------------------------------------------------------
 # Unlinked by design: nothing in the public navigation points at /admin, so it
 # is reached by typing the URL. That is obscurity, not access control - the
@@ -2523,3 +2517,11 @@ def linkedin_optimizer():
 
     return render_template('linkedin.html', report=report, profile=profile,
                            rewrites=rewrites, metrics=linkedinopt.WEIGHTS)
+
+
+# Keep this last: the dev server must not start until every route above has
+# been registered, or url_for() lookups in the context processor blow up.
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    debug_mode = os.environ.get("FLASK_DEBUG", "true").lower() == "true"
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)
