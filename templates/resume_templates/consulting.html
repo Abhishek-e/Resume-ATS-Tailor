@@ -1,0 +1,17 @@
+{% extends "resume_templates/_ats_base.html" %}
+{# Case-style: the dateline sits on its own line above each entry rather than
+   in a left column, because a real left column means a table or a float and
+   both scramble the extracted text order. #}
+{% set heading_experience = 'Experience' %}
+{% block styles %}
+    @page { size: A4; margin: 30px 46px; }
+    body { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; font-size: 10.5px; line-height: 1.5; }
+    .name { font-size: 22px; font-weight: bold; letter-spacing: 0.5px; margin-bottom: 2px; }
+    .role { font-size: 11px; color: #7c2d12; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 5px; }
+    .contact { font-size: 9.5px; color: #555555; border-top: 2px solid #7c2d12; padding-top: 6px; margin-bottom: 12px; }
+    .section-title { font-size: 11px; font-weight: bold; color: #7c2d12; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 14px; margin-bottom: 6px; }
+    .entry { margin-bottom: 10px; }
+    .entry-sub { font-size: 9.5px; letter-spacing: 0.5px; text-transform: uppercase; color: #7c2d12; }
+    .entry-title { font-weight: bold; font-size: 11px; margin-bottom: 2px; }
+    .skills { font-size: 10.5px; }
+{% endblock %}

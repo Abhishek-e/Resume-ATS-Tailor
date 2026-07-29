@@ -1,0 +1,16 @@
+{% extends "resume_templates/_ats_base.html" %}
+{# First role: education and projects carry the weight, so they run before
+   experience and the summary is framed as an objective. #}
+{% set heading_summary = 'Objective' %}
+{% set heading_projects = 'Academic & Personal Projects' %}
+{% block styles %}
+    @page { size: A4; margin: 32px 44px; }
+    body { font-family: Helvetica, Arial, sans-serif; color: #1f2937; font-size: 11px; line-height: 1.55; }
+    .name { font-size: 24px; font-weight: bold; color: #3730a3; text-align: center; margin-bottom: 2px; }
+    .role { font-size: 11.5px; color: #4b5563; text-align: center; margin-bottom: 5px; }
+    .contact { font-size: 9.5px; color: #4b5563; text-align: center; margin-bottom: 13px; }
+    .section-title { font-size: 11.5px; font-weight: bold; color: #3730a3; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #c7d2fe; padding-bottom: 2px; margin-top: 14px; margin-bottom: 6px; }
+    .entry-title { font-weight: bold; font-size: 11px; }
+    .entry-sub { color: #6b7280; font-size: 10px; margin-bottom: 2px; }
+    .skills { font-size: 10.5px; }
+{% endblock %}

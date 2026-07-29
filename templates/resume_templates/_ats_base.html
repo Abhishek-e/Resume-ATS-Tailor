@@ -1,0 +1,88 @@
+{#
+  Shared skeleton for the ATS pack.
+
+  Every template in the pack is the same document in a different suit: one
+  column, real headings, real lists, no tables, no images. That is not a
+  stylistic choice - it is the whole reason these score above 90 in
+  resumetemplates.ats_score(). Children override `styles` for typography and
+  set their section order in resumetemplates.TEMPLATES, so a redesign cannot
+  quietly reintroduce a parsing hazard.
+
+  Section order arrives as `spec.sections`; anything empty is skipped.
+#}
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    body { margin: 0; }
+    ul { margin: 2px 0 0 0; padding-left: 15px; }
+    li { margin-bottom: 2px; }
+    .entry { margin-bottom: 9px; }
+    {% block styles %}{% endblock %}
+</style>
+</head>
+<body>
+
+{% block header %}
+    <div class="name">{{ resume.get('full_name', '') }}</div>
+    {% if resume.get('target_role') %}<div class="role">{{ resume.get('target_role') }}</div>{% endif %}
+    {% set contact = resume.get('contact', {}) or {} %}
+    {% set bits = [contact.get('email'), contact.get('phone'), contact.get('location'),
+                   contact.get('linkedin'), contact.get('portfolio')]|select|list %}
+    {% if bits %}<div class="contact">{{ bits|join(sep|default('  |  ')) }}</div>{% endif %}
+{% endblock %}
+
+{% for section in spec.sections %}
+    {% if section == 'summary' and resume.get('summary') %}
+        <div class="section-title">{{ heading_summary|default('Professional Summary') }}</div>
+        <div class="summary">{{ resume.get('summary') }}</div>
+
+    {% elif section == 'skills' and resume.get('skills') %}
+        <div class="section-title">{{ heading_skills|default('Skills') }}</div>
+        {# Comma-joined rather than pills: one text run, so the parser reads
+           "SQL, Python, Forecasting" instead of three orphaned fragments. #}
+        <div class="skills">{{ resume.get('skills', [])|join(' · ') }}</div>
+
+    {% elif section == 'experience' and resume.get('experience') %}
+        <div class="section-title">{{ heading_experience|default('Professional Experience') }}</div>
+        {% for job in resume.get('experience', []) %}
+            <div class="entry">
+                <div class="entry-title">{{ job.get('title', '') }}{% if job.get('company') %}, {{ job.get('company') }}{% endif %}</div>
+                {% if job.get('dates') %}<div class="entry-sub">{{ job.get('dates') }}</div>{% endif %}
+                {% if job.get('bullets') %}
+                <ul>
+                    {% for bullet in job.get('bullets', []) %}<li>{{ bullet }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        {% endfor %}
+
+    {% elif section == 'education' and resume.get('education') %}
+        <div class="section-title">{{ heading_education|default('Education') }}</div>
+        {% for edu in resume.get('education', []) %}
+            <div class="entry">
+                <div class="entry-title">{{ edu.get('degree', '') }}{% if edu.get('school') %}, {{ edu.get('school') }}{% endif %}</div>
+                {% if edu.get('dates') %}<div class="entry-sub">{{ edu.get('dates') }}</div>{% endif %}
+            </div>
+        {% endfor %}
+
+    {% elif section == 'certifications' and resume.get('certifications') %}
+        <div class="section-title">{{ heading_certifications|default('Certifications') }}</div>
+        <ul>
+            {% for cert in resume.get('certifications', []) %}<li>{{ cert }}</li>{% endfor %}
+        </ul>
+
+    {% elif section == 'projects' and resume.get('projects') %}
+        <div class="section-title">{{ heading_projects|default('Projects') }}</div>
+        {% for proj in resume.get('projects', []) %}
+            <div class="entry">
+                <div class="entry-title">{{ proj.get('name', '') }}</div>
+                {% if proj.get('description') %}<div>{{ proj.get('description') }}</div>{% endif %}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endfor %}
+
+</body>
+</html>

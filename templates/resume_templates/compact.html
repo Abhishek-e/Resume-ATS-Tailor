@@ -1,0 +1,18 @@
+{% extends "resume_templates/_ats_base.html" %}
+{# Densest of the pack, for careers that would otherwise spill onto page three.
+   Body copy still holds at 10px - the ATS check fails anything under 9. #}
+{% set sep = '  ·  ' %}
+{% block styles %}
+    @page { size: A4; margin: 24px 38px; }
+    body { font-family: Helvetica, Arial, sans-serif; color: #222222; font-size: 10px; line-height: 1.35; }
+    .name { font-size: 20px; font-weight: bold; margin-bottom: 0; }
+    .role { font-size: 10.5px; color: #444444; margin-bottom: 3px; }
+    .contact { font-size: 9px; color: #555555; margin-bottom: 8px; }
+    .section-title { font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #888888; padding-bottom: 1px; margin-top: 10px; margin-bottom: 4px; }
+    .entry { margin-bottom: 6px; }
+    .entry-title { font-weight: bold; font-size: 10.5px; }
+    .entry-sub { color: #666666; font-size: 9px; }
+    ul { margin: 1px 0 0 0; padding-left: 13px; }
+    li { margin-bottom: 1px; }
+    .skills { font-size: 10px; }
+{% endblock %}

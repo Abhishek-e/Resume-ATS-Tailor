@@ -1,0 +1,16 @@
+{% extends "resume_templates/_ats_base.html" %}
+{# Skills sit directly under the contact block so a keyword scan hits them
+   first. Body stays on a metric-safe sans - no monospace, which several PDF
+   extractors letter-space badly. #}
+{% set heading_skills = 'Technical Skills' %}
+{% block styles %}
+    @page { size: A4; margin: 28px 42px; }
+    body { font-family: Helvetica, Arial, sans-serif; color: #1c1c1c; font-size: 10.5px; line-height: 1.5; }
+    .name { font-size: 23px; font-weight: bold; color: #14532d; margin-bottom: 1px; }
+    .role { font-size: 11.5px; color: #14532d; margin-bottom: 5px; }
+    .contact { font-size: 9.5px; color: #555555; margin-bottom: 11px; }
+    .section-title { font-size: 11px; font-weight: bold; color: #14532d; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1.5px solid #14532d; padding-bottom: 2px; margin-top: 13px; margin-bottom: 5px; }
+    .entry-title { font-weight: bold; font-size: 11px; }
+    .entry-sub { color: #666666; font-size: 9.5px; margin-bottom: 2px; }
+    .skills { font-size: 10.5px; line-height: 1.7; }
+{% endblock %}

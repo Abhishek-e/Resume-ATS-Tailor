@@ -27,8 +27,10 @@ from xhtml2pdf import pisa
 
 import adminstore
 import applykit
+import cvparse
 import linkedinopt
 import prepbank
+import resumetemplates
 import sitemedia
 import jobsources
 import jobstore
@@ -54,7 +56,7 @@ openrouter_client = OpenAI(
     api_key=OPENROUTER_API_KEY,
 ) if OPENROUTER_API_KEY else None
 
-RESUME_TEMPLATES = {"modern", "classic", "minimal"}
+RESUME_TEMPLATES = resumetemplates.VALID_TEMPLATES
 
 # Firebase Authentication, Google provider.
 #
@@ -935,9 +937,27 @@ these keys:
 - "certifications": array of strings
 - "projects": array of objects with "name", "description" (strings)"""
 
-    raw = _openrouter_generate(prompt, json_mode=True)
-    data = _extract_json_object(raw)
-    return ResumeContent(**data).model_dump()
+    def structured_fallback():
+        # Structure the candidate's own words rather than refusing. They still
+        # get a resume in any of the ten templates and a PDF out the other end
+        # - only the rewriting is missing, and the page says as much.
+        resume = cvparse.structure_resume(input_data)
+        resume['_fallback'] = True
+        return resume
+
+    if not openrouter_client:
+        return structured_fallback()
+
+    try:
+        raw = _openrouter_generate(prompt, json_mode=True)
+        data = _extract_json_object(raw)
+        return ResumeContent(**data).model_dump()
+    except Exception as e:
+        # A rejected key, a rate limit or a model that returned something
+        # unparseable all land here. None of them are a reason to hand the
+        # candidate an error page when their own input is enough to build on.
+        app.logger.warning("Resume generation fell back to the local builder: %s", e)
+        return structured_fallback()
 
 
 MAX_ANALYZE_RESUME_CHARS = 12000
@@ -1007,7 +1027,44 @@ Respond with ONLY a JSON object (no markdown, no commentary) with exactly these 
 def _render_resume_html(template, resume):
     if template not in RESUME_TEMPLATES:
         template = 'modern'
-    return render_template(f'resume_templates/{template}.html', resume=resume)
+    return render_template(
+        f'resume_templates/{template}.html',
+        resume=resume, spec=resumetemplates.TEMPLATES[template],
+    )
+
+
+# The ATS pack is the paid-attention tier: three templates stay open, the other
+# seven need an account. Enforced here rather than in the page, because the
+# render and download endpoints are reachable with a hand-made request.
+def _template_locked(template):
+    spec = resumetemplates.TEMPLATES.get(template)
+    return bool(spec) and spec['tier'] == 'ats' and not session.get('user_id')
+
+
+def _locked_response():
+    return jsonify({
+        "error": "Log in to use the ATS template pack.",
+        "login_url": url_for('login', next=url_for('generate_cv')),
+        "locked": True,
+    }), 401
+
+
+_template_catalogue = None
+
+
+def _resume_catalogue():
+    """Score every template once per process.
+
+    The scores are a property of the templates, not of the request, so this is
+    computed on first use and reused. Rendering needs an app context for
+    render_template, which is why it is not done at import time.
+    """
+    global _template_catalogue
+    if _template_catalogue is None:
+        _template_catalogue = resumetemplates.catalogue(
+            lambda key: _render_resume_html(key, resumetemplates.SAMPLE_RESUME)
+        )
+    return _template_catalogue
 
 
 def _html_to_pdf_bytes(html):
@@ -1018,17 +1075,29 @@ def _html_to_pdf_bytes(html):
     return buf.getvalue()
 
 
+# Word cannot carry the HTML layouts, but it can carry each template's accent
+# colour and whether it is a serif design - enough that the .docx still reads
+# as the template the candidate picked.
 _TEMPLATE_ACCENTS = {
     "modern": RGBColor(0x1F, 0x3A, 0x5F),
     "classic": RGBColor(0x00, 0x00, 0x00),
     "minimal": RGBColor(0x33, 0x33, 0x33),
+    "executive": RGBColor(0x1A, 0x1A, 0x1A),
+    "recruiter": RGBColor(0x20, 0x20, 0x20),
+    "technical": RGBColor(0x14, 0x53, 0x2D),
+    "compact": RGBColor(0x22, 0x22, 0x22),
+    "graduate": RGBColor(0x37, 0x30, 0xA3),
+    "consulting": RGBColor(0x7C, 0x2D, 0x12),
+    "federal": RGBColor(0x00, 0x00, 0x00),
 }
+
+_SERIF_TEMPLATES = {"classic", "executive", "consulting"}
 
 
 def _build_resume_docx(template, resume):
     doc = Document()
     accent = _TEMPLATE_ACCENTS.get(template, _TEMPLATE_ACCENTS["modern"])
-    font_name = 'Georgia' if template == 'classic' else 'Calibri'
+    font_name = 'Georgia' if template in _SERIF_TEMPLATES else 'Calibri'
 
     base_style = doc.styles['Normal']
     base_style.font.name = font_name
@@ -1107,17 +1176,46 @@ def _build_resume_docx(template, resume):
 
 
 @app.route('/generate-cv')
-@login_required
 def generate_cv():
-    return render_template('generate_cv.html')
+    # Open to guests: they get the three free templates and can export a PDF.
+    # The ATS pack renders as locked cards until they sign in.
+    return render_template(
+        'generate_cv.html',
+        templates=_resume_catalogue(),
+        ats_rules=[(w, label) for w, label, _ in resumetemplates.RULES],
+    )
+
+
+@app.route('/generate-cv/parse', methods=['POST'])
+def generate_cv_parse():
+    """Read an uploaded CV and hand back the Build form, pre-filled.
+
+    Rule-based (cvparse), so it answers in milliseconds and keeps working when
+    the model provider is down - and every value lands in an editable input
+    the candidate reviews before anything is generated.
+    """
+    uploaded = request.files.get('resume_file')
+    if not uploaded or not uploaded.filename:
+        return jsonify({"error": "Choose a .txt, .docx or .pdf file to import."}), 400
+
+    try:
+        text = _extract_text_from_upload(uploaded)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception:
+        return jsonify({"error": "That file could not be read. Try a different export."}), 400
+
+    if not (text or '').strip():
+        return jsonify({
+            "error": "No text found in that file - it may be a scanned image. "
+                     "Export a text PDF, or paste the details in below."
+        }), 422
+
+    return jsonify(cvparse.parse_resume_text(text))
 
 
 @app.route('/generate-cv/build', methods=['POST'])
-@login_required
 def generate_cv_build():
-    if not openrouter_client:
-        return jsonify({"error": "OPENROUTER_API_KEY is not configured on the server."}), 503
-
     input_data = request.get_json(silent=True) or {}
     if not (input_data.get('full_name') and input_data.get('target_role')):
         return jsonify({"error": "Full name and target role are required."}), 400
@@ -1127,22 +1225,28 @@ def generate_cv_build():
     except Exception as e:
         return jsonify({"error": f"Failed to generate resume: {e}"}), 502
 
-    return jsonify({"resume": resume})
+    # False when the wording is the candidate's own rather than rewritten - the
+    # page says so rather than implying an AI pass that did not happen.
+    rewritten = not resume.pop('_fallback', False)
+    return jsonify({"resume": resume, "ai": rewritten})
 
 
 @app.route('/generate-cv/render', methods=['POST'])
-@login_required
 def generate_cv_render():
     data = request.get_json(silent=True) or {}
-    return _render_resume_html(data.get('template', 'modern'), data.get('resume') or {})
+    template = data.get('template', 'modern')
+    if _template_locked(template):
+        return _locked_response()
+    return _render_resume_html(template, data.get('resume') or {})
 
 
 @app.route('/generate-cv/download/pdf', methods=['POST'])
-@login_required
 def generate_cv_download_pdf():
     data = request.get_json(silent=True) or {}
     template = data.get('template', 'modern')
     resume = data.get('resume') or {}
+    if _template_locked(template):
+        return _locked_response()
     try:
         pdf_bytes = _html_to_pdf_bytes(_render_resume_html(template, resume))
     except Exception as e:
@@ -1154,11 +1258,12 @@ def generate_cv_download_pdf():
 
 
 @app.route('/generate-cv/download/docx', methods=['POST'])
-@login_required
 def generate_cv_download_docx():
     data = request.get_json(silent=True) or {}
     template = data.get('template', 'modern')
     resume = data.get('resume') or {}
+    if _template_locked(template):
+        return _locked_response()
     try:
         docx_bytes = _build_resume_docx(template, resume)
     except Exception as e:
@@ -1229,6 +1334,80 @@ def generate_cv_analyze():
         return jsonify({"error": f"Failed to analyze resume: {e}"}), 502
 
     return jsonify({"analysis": analysis})
+
+
+def _markdown_to_pdf_html(md):
+    """Minimal Markdown -> HTML for the optimised resume export.
+
+    The model is asked for headings, bullets and bold and nothing else, so a
+    full Markdown library would be weight for features this never sees. Escape
+    first, then re-introduce only that subset - a stray "<script>" in the model
+    output stays inert text.
+    """
+    out, in_list = [], False
+
+    def inline(text):
+        text = (text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
+        text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+        text = re.sub(r'(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)', r'<em>\1</em>', text)
+        text = re.sub(r'`(.+?)`', r'<span class="mono">\1</span>', text)
+        return text
+
+    for raw in (md or '').split('\n'):
+        line = raw.rstrip()
+        bullet = re.match(r'^\s*[-*+•]\s+(.*)$', line)
+        heading = re.match(r'^(#{1,6})\s+(.*)$', line)
+
+        if bullet:
+            if not in_list:
+                out.append('<ul>')
+                in_list = True
+            out.append(f'<li>{inline(bullet.group(1))}</li>')
+            continue
+
+        if in_list:
+            out.append('</ul>')
+            in_list = False
+
+        if heading:
+            level = min(len(heading.group(1)), 3) + 1  # h1 in the doc -> h2 here
+            out.append(f'<h{level}>{inline(heading.group(2))}</h{level}>')
+        elif not line.strip():
+            continue
+        elif re.match(r'^\s*([-*_])\s*\1\s*\1[\s\-*_]*$', line):
+            out.append('<hr>')
+        else:
+            out.append(f'<p>{inline(line)}</p>')
+
+    if in_list:
+        out.append('</ul>')
+    return '\n'.join(out)
+
+
+@app.route('/generate-cv/analyze/download/pdf', methods=['POST'])
+@login_required
+def generate_cv_analyze_download_pdf():
+    data = request.get_json(silent=True) or {}
+    analysis = data.get('analysis') or {}
+    markdown = analysis.get('optimized_resume_markdown') or ''
+    if not markdown.strip():
+        return jsonify({"error": "Run an analysis first."}), 400
+
+    html = render_template(
+        'resume_templates/optimized.html',
+        body=_markdown_to_pdf_html(markdown),
+        before_score=analysis.get('before_score', 0),
+        after_score=analysis.get('after_score', 0),
+    )
+    try:
+        pdf_bytes = _html_to_pdf_bytes(html)
+    except Exception as e:
+        return jsonify({"error": f"Failed to build PDF: {e}"}), 500
+
+    return send_file(
+        io.BytesIO(pdf_bytes), mimetype='application/pdf',
+        as_attachment=True, download_name='optimized-resume.pdf',
+    )
 
 
 @app.route('/generate-cv/analyze/save', methods=['POST'])

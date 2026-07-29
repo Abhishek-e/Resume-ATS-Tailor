@@ -640,6 +640,210 @@ body {
     color: #fff;
 }
 
+/* Import an existing CV. Sits above the form because it is the shortcut past
+   filling thirteen fields by hand. */
+.cv-import-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.15rem 1.35rem;
+    margin-bottom: 1.25rem;
+    border: 1px dashed var(--tblr-primary);
+    border-radius: var(--tblr-border-radius-lg);
+    background: color-mix(in srgb, var(--tblr-primary) 5%, var(--tblr-bg-surface));
+}
+
+.cv-import-copy { flex: 1 1 260px; }
+.cv-import-title { font-size: 1rem; font-weight: 600; margin: 0 0 .2rem; }
+.cv-import-sub { font-size: .8125rem; color: var(--tblr-secondary); margin: 0; }
+
+.cv-import-btn {
+    flex: 0 0 auto;
+    padding: .6rem 1.4rem;
+    border-radius: var(--tblr-border-radius);
+    background: var(--tblr-primary);
+    color: #fff;
+    font-size: .875rem;
+    font-weight: 600;
+    cursor: pointer;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: filter .2s;
+}
+
+.cv-import-btn:hover { filter: brightness(1.08); }
+#cv-import-file { display: none; }
+
+/* Template gallery */
+.tpl-gallery-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .5rem;
+    margin-bottom: .35rem;
+}
+
+.tpl-info-btn {
+    border: 0;
+    background: none;
+    padding: 0;
+    font-size: .8125rem;
+    color: var(--tblr-primary);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.tpl-group-label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin: 1rem 0 .5rem;
+    font-size: .8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.tpl-group-note {
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--tblr-secondary);
+}
+
+.tpl-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: .625rem;
+    margin-bottom: 1rem;
+}
+
+.tpl-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    padding: .7rem .85rem 2.1rem;
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius);
+    background: var(--tblr-bg-surface);
+    color: var(--tblr-body-color);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color .2s, box-shadow .2s, transform .2s var(--rs-ease);
+}
+
+.tpl-card:hover { border-color: var(--tblr-primary); transform: translateY(-2px); }
+
+.tpl-card.active {
+    border-color: var(--tblr-primary);
+    box-shadow: 0 0 0 1px var(--tblr-primary) inset;
+}
+
+.tpl-card-name {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .875rem;
+    font-weight: 600;
+}
+
+.tpl-card-blurb {
+    font-size: .75rem;
+    line-height: 1.4;
+    color: var(--tblr-secondary);
+}
+
+/* Pinned so the score sits on the same baseline on every card, however long
+   the blurb wraps - hence the padding reserved at the bottom of .tpl-card. */
+.tpl-card-score {
+    position: absolute;
+    left: .85rem;
+    bottom: .65rem;
+    font-size: .625rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--tblr-secondary);
+}
+
+.tpl-score-num {
+    display: inline-block;
+    padding: .05rem .3rem;
+    border-radius: 4px;
+    background: color-mix(in srgb, #16a34a 15%, transparent);
+    color: #15803d;
+    font-size: .6875rem;
+}
+
+.tpl-lock { color: var(--tblr-secondary); flex: 0 0 auto; }
+
+/* Locked cards stay legible - the point is to advertise what is behind the
+   login, not to hide it. */
+.tpl-card.locked { border-style: dashed; }
+.tpl-card.locked .tpl-card-name,
+.tpl-card.locked .tpl-card-blurb { opacity: .72; }
+
+.analyze-locked-card {
+    max-width: 34rem;
+    margin: 1.5rem auto;
+    padding: 2rem 1.75rem;
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius-lg);
+    background: var(--tblr-bg-surface);
+    text-align: center;
+    color: var(--tblr-secondary);
+}
+
+.analyze-locked-card svg { color: var(--tblr-primary); margin-bottom: .5rem; }
+.analyze-locked-card h2 { font-size: 1.25rem; font-weight: 600; color: var(--tblr-body-color); margin-bottom: .5rem; }
+.analyze-locked-card p { font-size: .875rem; margin-bottom: 1.25rem; }
+
+.analyze-locked-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: .625rem;
+    margin-bottom: 1rem;
+}
+
+.analyze-locked-foot { font-size: .75rem; margin: 0 !important; }
+
+.ats-rule-list { list-style: none; padding: 0; margin: 0 0 1rem; }
+
+.ats-rule-list li {
+    display: flex;
+    align-items: baseline;
+    gap: .625rem;
+    padding: .3rem 0;
+    font-size: .875rem;
+    border-bottom: 1px solid var(--tblr-border-color);
+}
+
+.ats-rule-weight {
+    flex: 0 0 2rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--tblr-primary);
+    text-align: right;
+}
+
+/* Same lift the prep cards and hero accents needed - the brand primary is
+   ~2.3:1 on the dark surfaces these sit on. */
+:root[data-bs-theme="dark"] .tpl-info-btn,
+:root[data-bs-theme="dark"] .ats-rule-weight,
+:root[data-bs-theme="dark"] .analyze-locked-card svg { color: #a78bfa; }
+
+:root[data-bs-theme="dark"] .tpl-score-num {
+    background: rgba(74, 222, 128, .18);
+    color: #4ade80;
+}
+
 .cv-preview-section { display: none; }
 .cv-preview-section.visible { display: block; }
 

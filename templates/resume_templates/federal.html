@@ -1,0 +1,19 @@
+{% extends "resume_templates/_ats_base.html" %}
+{# Government and large-institution portals run the crudest parsers of the
+   lot: no colour, no rules, unambiguous headings, dates spelled out. #}
+{% set sep = '  |  ' %}
+{% set heading_summary = 'Summary of Qualifications' %}
+{% set heading_experience = 'Work Experience' %}
+{% set heading_skills = 'Skills' %}
+{% block styles %}
+    @page { size: A4; margin: 36px 48px; }
+    body { font-family: Arial, Helvetica, sans-serif; color: #000000; font-size: 11px; line-height: 1.6; }
+    .name { font-size: 20px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+    .role { font-size: 11.5px; margin-bottom: 4px; }
+    .contact { font-size: 10px; margin-bottom: 14px; }
+    .section-title { font-size: 12px; font-weight: bold; text-transform: uppercase; margin-top: 15px; margin-bottom: 5px; }
+    .entry { margin-bottom: 11px; }
+    .entry-title { font-weight: bold; font-size: 11px; }
+    .entry-sub { font-size: 10.5px; margin-bottom: 2px; }
+    .skills { font-size: 11px; }
+{% endblock %}

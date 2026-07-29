@@ -15,6 +15,18 @@
         </div>
 
         <div id="build-panel">
+        {# Import first: filling thirteen fields by hand is the reason people
+           abandon this page, and a CV they already have answers all of them. #}
+        <div class="cv-import-card">
+            <div class="cv-import-copy">
+                <h2 class="cv-import-title">Start from a CV you already have</h2>
+                <p class="cv-import-sub">Upload a .pdf, .docx or .txt and we'll read your details straight into the form below. Nothing is generated until you review it.</p>
+            </div>
+            <label for="cv-import-file" class="cv-import-btn" id="cv-import-label">Choose file</label>
+            <input type="file" id="cv-import-file" accept=".txt,.docx,.pdf">
+        </div>
+        <div id="cv-import-status" class="jobs-status" style="display:none;"></div>
+
         <form id="cv-form" class="jobs-search-form">
             <div class="form-row">
                 <div class="form-group">
@@ -82,12 +94,54 @@
         <div id="cv-status" class="jobs-status" style="display:none;"></div>
 
         <div id="preview-section" class="cv-preview-section">
-            <div class="cv-preview-header">
-                <div class="template-switcher">
-                    <button type="button" class="template-btn active" data-template="modern">Modern</button>
-                    <button type="button" class="template-btn" data-template="classic">Classic</button>
-                    <button type="button" class="template-btn" data-template="minimal">Minimal</button>
+            <div class="tpl-gallery-head">
+                <h2 class="profile-section-title mb-0">Templates</h2>
+                <button type="button" class="tpl-info-btn" data-bs-toggle="modal" data-bs-target="#ats-info-modal">
+                    How the ATS score is measured
+                </button>
+            </div>
+
+            {% for group, label, note in [
+                ('free', 'Free', 'Try and download any of these without an account.'),
+                ('ats',  'ATS pack', 'Every one scores above 90 on the parse check. PDF and Word export included.')
+            ] %}
+                <div class="tpl-group-label">
+                    <span>{{ label }}</span>
+                    <span class="tpl-group-note">{{ note }}</span>
+                    {% if group == 'ats' and not session.user_id %}
+                        <span class="badge badge-new">Log in to unlock</span>
+                    {% endif %}
                 </div>
+                <div class="tpl-grid">
+                    {% for tpl in templates if tpl.tier == group %}
+                        {% set locked = group == 'ats' and not session.user_id %}
+                        <button type="button"
+                                class="tpl-card{% if tpl.key == 'modern' %} active{% endif %}{% if locked %} locked{% endif %}"
+                                data-template="{{ tpl.key }}"
+                                {% if locked %}data-locked="1"{% endif %}>
+                            <span class="tpl-card-name">
+                                {{ tpl.name }}
+                                {% if locked %}
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="tpl-lock" width="14" height="14"
+                                         viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" fill="none"
+                                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                                        <path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6z"/>
+                                        <path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0"/>
+                                        <path d="M8 11v-4a4 4 0 1 1 8 0v4"/>
+                                    </svg>
+                                {% endif %}
+                            </span>
+                            <span class="tpl-card-blurb">{{ tpl.blurb }}</span>
+                            <span class="tpl-card-score" title="{{ tpl.passed|length }} of {{ tpl.passed|length + tpl.failed|length }} parse checks passed">
+                                <span class="tpl-score-num">{{ tpl.ats }}</span> ATS
+                            </span>
+                        </button>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+
+            <div class="cv-preview-header">
                 <div class="cv-preview-actions">
                     <button type="button" class="resume-btn" id="download-pdf-btn">Download PDF</button>
                     <button type="button" class="resume-btn" id="download-word-btn">Download Word</button>
@@ -102,6 +156,27 @@
         </div>
 
         <div id="analyze-panel" style="display:none;">
+            {% if not session.user_id %}
+                {# Same gate as the ATS pack, and the same reason: this one runs
+                   a full analysis and writes to the account's history. #}
+                <div class="analyze-locked-card">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24"
+                         stroke-width="1.8" stroke="currentColor" fill="none"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6z"/>
+                        <path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0"/>
+                        <path d="M8 11v-4a4 4 0 1 1 8 0v4"/>
+                    </svg>
+                    <h2>Analyze &amp; Tailor is for members</h2>
+                    <p>Score your CV against a job description, see what changed section by section, and export the tailored version as a PDF.</p>
+                    <div class="analyze-locked-actions">
+                        <a href="{{ url_for('login', next=url_for('generate_cv') + '?tab=analyze') }}" class="submit-btn" style="width:auto; padding:10px 24px;">Log in</a>
+                        <a href="{{ url_for('register') }}" class="resume-btn">Create an account</a>
+                    </div>
+                    <p class="analyze-locked-foot">Building from scratch and the three free templates stay open &mdash; no account needed.</p>
+                </div>
+            {% else %}
             <form id="analyze-form" class="jobs-search-form">
                 <div class="form-group">
                     <label for="resume-text">Paste your resume</label>
@@ -184,16 +259,46 @@
                     </div>
                     <div class="optimized-cv-actions">
                         <button type="button" class="resume-btn" id="copy-cv-btn">Copy to Clipboard</button>
-                        <button type="button" class="resume-btn" id="download-cv-btn">Download .md</button>
+                        <button type="button" class="resume-btn" id="download-cv-btn">Download PDF</button>
                         <button type="button" class="submit-btn" id="analyze-save-btn" style="width:auto; padding:10px 22px;">Save to Profile</button>
                     </div>
                     <div id="analyze-save-status" class="jobs-status" style="display:none;"></div>
                 </div>
             </div>
+            {% endif %}
         </div>
     </section>
 
-    
+    {# What the badge on each template card actually counts. Declarative
+       data-bs-toggle only - window.bootstrap is not published by the vendored
+       Tabler bundle. #}
+    <div class="modal modal-blur fade" id="ats-info-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">How the ATS score is measured</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-secondary">
+                        This is a <strong>parse</strong> score, not a job-match score: it measures how
+                        cleanly the layout survives being read back by an applicant tracking system.
+                        Each template is rendered and checked on every one of these, and the badge is
+                        whatever it earns &mdash; nothing is set by hand.
+                    </p>
+                    <ul class="ats-rule-list">
+                        {% for weight, label in ats_rules %}
+                            <li><span class="ats-rule-weight">{{ weight }}</span> {{ label }}</li>
+                        {% endfor %}
+                    </ul>
+                    <p class="text-secondary mb-0">
+                        Your match against a specific job is a different question &mdash; that is what
+                        <strong>Analyze &amp; Tailor</strong> scores.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block scripts %}
@@ -203,7 +308,7 @@
     const statusEl = document.getElementById('cv-status');
     const previewSection = document.getElementById('preview-section');
     const previewFrame = document.getElementById('preview-frame');
-    const templateBtns = document.querySelectorAll('.template-btn');
+    const templateBtns = document.querySelectorAll('.tpl-card');
     const saveBtn = document.getElementById('save-btn');
     const saveStatus = document.getElementById('save-status');
     const downloadPdfBtn = document.getElementById('download-pdf-btn');
@@ -212,6 +317,8 @@
     let currentResume = null;
     let currentInputData = null;
     let currentTemplate = 'modern';
+
+    const LOGIN_URL = "{{ url_for('login', next=url_for('generate_cv')) }}";
 
     function slugify(text) {
         return (text || 'resume').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'resume';
@@ -277,10 +384,17 @@
             }
             currentResume = data.resume;
             currentInputData = payload;
-            statusEl.style.display = 'none';
+            if (data.ai === false) {
+                // Say plainly that this is their own wording, formatted -
+                // not a rewrite that silently did not happen.
+                statusEl.style.display = 'block';
+                statusEl.textContent = 'Formatted your details as written (AI rewriting is unavailable right now). Pick a template and export below.';
+            } else {
+                statusEl.style.display = 'none';
+            }
             saveStatus.style.display = 'none';
             templateBtns.forEach(b => b.classList.remove('active'));
-            document.querySelector('.template-btn[data-template="modern"]').classList.add('active');
+            document.querySelector('.tpl-card[data-template="modern"]').classList.add('active');
             currentTemplate = 'modern';
             await renderPreview();
             previewSection.classList.add('visible');
@@ -295,12 +409,66 @@
 
     templateBtns.forEach(btn => {
         btn.addEventListener('click', () => {
+            if (btn.dataset.locked) {
+                window.location.href = LOGIN_URL;
+                return;
+            }
             if (!currentResume) return;
             templateBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentTemplate = btn.dataset.template;
             renderPreview();
         });
+    });
+
+    // --- Import an existing CV -------------------------------------------
+    // Prefills the form; the candidate still reviews every field and presses
+    // Generate themselves, so a mis-read line is visible before it matters.
+    const importFile = document.getElementById('cv-import-file');
+    const importLabel = document.getElementById('cv-import-label');
+    const importStatus = document.getElementById('cv-import-status');
+
+    const FIELD_LABELS = {
+        full_name: 'name', target_role: 'target role', email: 'email', phone: 'phone',
+        location: 'location', linkedin: 'LinkedIn', portfolio: 'portfolio',
+        summary: 'summary', skills: 'skills', experience: 'experience',
+        education: 'education', certifications: 'certifications', projects: 'projects',
+    };
+
+    importFile.addEventListener('change', async () => {
+        if (!importFile.files.length) return;
+        const file = importFile.files[0];
+
+        importLabel.textContent = 'Reading...';
+        importStatus.style.display = 'block';
+        importStatus.textContent = `Reading ${file.name}...`;
+
+        try {
+            const formData = new FormData();
+            formData.append('resume_file', file);
+            const res = await fetch("{{ url_for('generate_cv_parse') }}", { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (!res.ok) {
+                importStatus.textContent = data.error || 'Could not read that file.';
+                return;
+            }
+
+            Object.entries(data.fields).forEach(([key, value]) => {
+                const input = document.getElementById(key);
+                if (input && value) input.value = value;
+            });
+
+            const found = (data.filled || []).map(k => FIELD_LABELS[k] || k);
+            importStatus.textContent = found.length
+                ? `Pulled ${found.length} field${found.length === 1 ? '' : 's'} from ${file.name}: ${found.join(', ')}. Check them over before generating.`
+                : `We couldn't find any recognisable sections in ${file.name}. Fill the form in below instead.`;
+            document.getElementById('full_name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (err) {
+            importStatus.textContent = 'Network error while reading that file.';
+        } finally {
+            importLabel.textContent = file.name;
+        }
     });
 
     downloadPdfBtn.addEventListener('click', async () => {
@@ -386,6 +554,9 @@
     setMode(initialMode);
 
     // --- Analyze & Tailor ---
+    // Guests get the locked card instead of the form, so everything below is
+    // skipped rather than binding to elements that were never rendered.
+    if (document.getElementById('analyze-form')) {
     const analyzeForm = document.getElementById('analyze-form');
     const analyzeBtn = document.getElementById('analyze-btn');
     const analyzeStatus = document.getElementById('analyze-status');
@@ -588,10 +759,22 @@
         }
     });
 
-    downloadCvBtn.addEventListener('click', () => {
+    downloadCvBtn.addEventListener('click', async () => {
         if (!currentAnalysis) return;
-        const blob = new Blob([currentAnalysis.optimized_resume_markdown || ''], { type: 'text/markdown' });
-        triggerDownload(blob, 'optimized-resume.md');
+        downloadCvBtn.textContent = 'Preparing...';
+        try {
+            const res = await fetch("{{ url_for('generate_cv_analyze_download_pdf') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ analysis: currentAnalysis }),
+            });
+            if (!res.ok) throw new Error('failed');
+            triggerDownload(await res.blob(), 'optimized-resume.pdf');
+        } catch (err) {
+            alert('Failed to build the PDF.');
+        } finally {
+            downloadCvBtn.textContent = 'Download PDF';
+        }
     });
 
     analyzeSaveBtn.addEventListener('click', async () => {
@@ -619,5 +802,6 @@
             analyzeSaveBtn.textContent = 'Save to Profile';
         }
     });
+    }  // end signed-in Analyze & Tailor block
     </script>
 {% endblock %}
