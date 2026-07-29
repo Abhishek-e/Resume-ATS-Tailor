@@ -4,6 +4,9 @@ serviceAccountKey.json
 .env.*
 # Local and OS files
 .DS_Store
+# Python bytecode
+__pycache__/
+*.pyc
 # Editor & tool configs
 .claude/
 # Virtual envs
