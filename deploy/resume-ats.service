@@ -1,0 +1,35 @@
+# systemd unit to run Resumify (gunicorn) on boot and restart it on crash.
+#
+# Install:
+#   sudo cp deploy/resume-ats.service /etc/systemd/system/resume-ats.service
+#   # edit User/WorkingDirectory/paths below if your username or path differ
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now resume-ats
+#   systemctl status resume-ats
+#   journalctl -u resume-ats -f      # live logs
+#
+# Assumes the repo is at /home/pi/Resume-ATS-Tailor with a .venv created by
+# deploy/setup-pi.sh. Change 'pi' and the paths if yours differ.
+[Unit]
+Description=Resumify (Flask/gunicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/Resume-ATS-Tailor
+# gunicorn reads .env only via the app's load_dotenv(), so we also point
+# EnvironmentFile at it so PORT etc. are visible to the unit if needed.
+EnvironmentFile=/home/pi/Resume-ATS-Tailor/.env
+# One worker with threads: the in-process job cache must not be split across
+# workers (see render.yaml). Bind to 0.0.0.0 so other devices on the LAN reach it.
+ExecStart=/home/pi/Resume-ATS-Tailor/.venv/bin/gunicorn app:app \
+    --workers 1 --threads 8 --timeout 120 \
+    --bind 0.0.0.0:5000 --access-logfile -
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
