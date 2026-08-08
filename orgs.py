@@ -214,8 +214,45 @@ def list_jobs(db, org_id) -> list:
         p = doc.to_dict()
         p["id"] = doc.id
         posts.append(p)
-    posts.sort(key=lambda p: p.get("created_at", 0), reverse=True)
+    # Sponsored posts float to the top, then newest first.
+    posts.sort(key=lambda p: (not p.get("sponsored"), -p.get("created_at", 0)))
     return posts
+
+
+def set_sponsored(db, org_id, post_id, sponsored) -> bool:
+    """Toggle the sponsored/featured flag on one of the org's own posts."""
+    post = get_job(db, post_id)
+    if post is None or post.get("org_id") != org_id:
+        return False
+    db.collection("org_job_posts").document(post_id).update({
+        "sponsored": bool(sponsored),
+        "sponsored_at": _now() if sponsored else 0,
+    })
+    return True
+
+
+def list_sponsored_posts(db, limit=6) -> list:
+    """Featured openings across every employer, for the public jobs board.
+
+    This is the visibility a sponsor pays for - their post surfaces beyond their
+    own careers page. Newest sponsored first; the employer name is attached.
+    """
+    if db is None:
+        return []
+    from dbstore import FieldFilter
+    posts = []
+    org_names = {}
+    for doc in db.collection("org_job_posts").where(filter=FieldFilter("sponsored", "==", True)).stream():
+        p = doc.to_dict()
+        p["id"] = doc.id
+        oid = p.get("org_id")
+        if oid not in org_names:
+            org = get_org(db, oid)
+            org_names[oid] = org["name"] if org else ""
+        p["org_name"] = org_names[oid]
+        posts.append(p)
+    posts.sort(key=lambda p: p.get("sponsored_at", 0), reverse=True)
+    return posts[:limit]
 
 
 def get_job(db, post_id):
@@ -323,3 +360,86 @@ def candidate_pool_size(db) -> int:
         if (doc.to_dict().get("details") or {}).get("recruiter_visible"):
             n += 1
     return n
+
+
+# --- billing (order records; no payment processing) ------------------------
+#
+# Deliberately provider-agnostic and honest: buying records a PENDING order. A
+# real payment provider (e.g. Razorpay for INR) would be wired at create_order
+# (return a hosted checkout/link) and a webhook would call mark_order_paid on
+# success. Until then a site admin reconciles offline payments by marking an
+# order paid, which applies its effect (currently: extra member seats).
+
+PRODUCTS = {
+    "seats_25": {"label": "+25 member seats", "amount": 4999, "seats_delta": 25},
+    "seats_100": {"label": "+100 member seats", "amount": 14999, "seats_delta": 100},
+}
+CURRENCY = "₹"
+
+
+def create_order(db, org_id, product_slug) -> str | None:
+    """Record a pending order for a product. Returns the order id, or None for
+    an unknown product."""
+    product = PRODUCTS.get(product_slug)
+    if product is None:
+        return None
+    org = get_org(db, org_id)
+    ref = db.collection("orders").document()
+    ref.set({
+        "org_id": org_id,
+        "org_name": org["name"] if org else "",
+        "product": product_slug,
+        "label": product["label"],
+        "amount": product["amount"],
+        "currency": CURRENCY,
+        "status": "pending",
+        "created_at": _now(),
+        "paid_at": 0,
+    })
+    return ref.id
+
+
+def list_orders(db, org_id) -> list:
+    if db is None:
+        return []
+    from dbstore import FieldFilter
+    rows = []
+    for doc in db.collection("orders").where(filter=FieldFilter("org_id", "==", org_id)).stream():
+        o = doc.to_dict()
+        o["id"] = doc.id
+        rows.append(o)
+    rows.sort(key=lambda o: o.get("created_at", 0), reverse=True)
+    return rows
+
+
+def list_all_orders(db) -> list:
+    if db is None:
+        return []
+    rows = []
+    for doc in db.collection("orders").stream():
+        o = doc.to_dict()
+        o["id"] = doc.id
+        rows.append(o)
+    rows.sort(key=lambda o: (o.get("status") != "pending", -o.get("created_at", 0)))
+    return rows
+
+
+def mark_order_paid(db, order_id) -> bool:
+    """Mark an order paid and apply its effect (raise the org's seat limit).
+    Idempotent: a re-mark does not apply the effect twice."""
+    doc = db.collection("orders").document(order_id).get()
+    if not doc.exists:
+        return False
+    order = doc.to_dict()
+    if order.get("status") == "paid":
+        return True
+    db.collection("orders").document(order_id).update({"status": "paid", "paid_at": _now()})
+
+    product = PRODUCTS.get(order.get("product"))
+    if product and product.get("seats_delta"):
+        org = get_org(db, order.get("org_id"))
+        if org:
+            db.collection("organizations").document(org["id"]).update({
+                "seat_limit": int(org.get("seat_limit", 0)) + product["seats_delta"],
+            })
+    return True

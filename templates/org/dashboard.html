@@ -16,6 +16,7 @@
         <div class="ms-auto btn-list">
             {% if org.my_role == 'org_admin' %}
                 <a href="{{ url_for('org_members') }}" class="btn btn-ghost-secondary">Manage members</a>
+                <a href="{{ url_for('org_billing') }}" class="btn btn-ghost-secondary">Billing</a>
                 {% if org.type == 'employer' %}
                     <a href="{{ url_for('org_candidates') }}" class="btn btn-ghost-secondary">Search candidates</a>
                     <a href="{{ url_for('org_jobs') }}" class="btn btn-primary">Post &amp; manage jobs</a>

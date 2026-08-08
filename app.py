@@ -672,6 +672,31 @@ def org_members():
                            seats=orgs.seats(db, org['id']))
 
 
+@app.route('/org/billing', methods=['GET', 'POST'])
+@login_required
+def org_billing():
+    """Org billing: shows the plan/seats, sells seat packs, lists orders.
+
+    No online payment yet - buying records a pending order that a site admin
+    reconciles (marks paid) from the admin Orders page, which applies the seats.
+    """
+    org = _require_org_admin()
+    if org is None:
+        flash('Only an organisation admin can manage billing.', 'error')
+        return redirect(url_for('org_home'))
+    if request.method == 'POST':
+        if orgs.create_order(db, org['id'], request.form.get('product')):
+            flash("Order placed. Online payment isn't enabled yet — we'll confirm "
+                  "and activate it shortly.", 'success')
+        else:
+            flash('Unknown product.', 'error')
+        return redirect(url_for('org_billing'))
+    return render_template('org/billing.html', org=org,
+                           seats=orgs.seats(db, org['id']),
+                           products=orgs.PRODUCTS, currency=orgs.CURRENCY,
+                           orders=orgs.list_orders(db, org['id']))
+
+
 @app.route('/org/jobs', methods=['GET', 'POST'])
 @login_required
 def org_jobs():
@@ -703,6 +728,20 @@ def org_applicants(post_id):
         abort(404)
     return render_template('org/applicants.html', org=org, post=post,
                            applicants=orgs.list_applicants(db, org['id'], post_id))
+
+
+@app.route('/org/jobs/<post_id>/sponsor', methods=['POST'])
+@login_required
+def org_job_sponsor(post_id):
+    """Toggle a post's featured/sponsored flag - it then surfaces on the public
+    jobs board beyond the org's own careers page."""
+    org = _require_org_admin()
+    if org is None or org['type'] != 'employer':
+        return redirect(url_for('org_home'))
+    on = request.form.get('sponsored') == '1'
+    if orgs.set_sponsored(db, org['id'], post_id, on):
+        flash('Job is now featured.' if on else 'Job is no longer featured.', 'success')
+    return redirect(url_for('org_jobs'))
 
 
 @app.route('/org/candidates')
@@ -818,6 +857,8 @@ def jobs():
     return render_template(
         'jobs.html',
         jobs=results,
+        # Sponsored employer openings, surfaced across all orgs at the top.
+        featured_jobs=orgs.list_sponsored_posts(db, limit=4),
         jobs_warming=jobs_warming,
         total_cached=state['count'],
         fetched_at=state['fetched_at'],
@@ -2392,6 +2433,20 @@ def admin_pricing():
         promo_end_input=_epoch_to_local_input(promo.get('end')),
         plan_options=[('all', 'All plans')] + [(p['slug'], p['name']) for p in plans.list_plans()],
     )
+
+
+@app.route('/admin/orders', methods=['GET', 'POST'])
+@admin_required
+def admin_orders():
+    """Reconcile B2B orders. Marking one paid applies its effect (extra seats).
+    This is where a payment provider's webhook would call mark_order_paid."""
+    if request.method == 'POST':
+        if orgs.mark_order_paid(db, request.form.get('order_id')):
+            flash('Order marked paid and applied.', 'success')
+        else:
+            flash('Order not found.', 'error')
+        return redirect(url_for('admin_orders'))
+    return render_template('admin/orders.html', orders=orgs.list_all_orders(db))
 
 
 @app.route('/admin/job-alert', methods=['GET', 'POST'])

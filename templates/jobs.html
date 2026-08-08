@@ -38,6 +38,25 @@
 {% endblock %}
 
 {% block content %}
+    {% if featured_jobs %}
+        <div class="card mb-3 border-warning">
+            <div class="card-header"><h3 class="card-title">★ Featured openings</h3></div>
+            <div class="list-group list-group-flush">
+                {% for p in featured_jobs %}
+                <a href="{{ url_for('org_careers', org_id=p.org_id) }}" class="list-group-item list-group-item-action d-flex flex-wrap align-items-center gap-2">
+                    <div>
+                        <div class="fw-bold">{{ p.title }}
+                            <span class="badge bg-yellow-lt ms-1">Featured</span>
+                        </div>
+                        <div class="text-secondary small">{{ [p.org_name, p.location, p.employment_type] | select | join(' · ') }}</div>
+                    </div>
+                    <span class="ms-auto text-primary small">View &amp; apply →</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
     {% if jobs_warming %}
         {# Cold cache: the fetch runs in the background so this page never blocks
            on it. Reload shortly to pick up the warmed listings. #}

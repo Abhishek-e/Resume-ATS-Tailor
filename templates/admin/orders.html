@@ -1,0 +1,41 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_orders" %}
+{% block title %}Orders{% endblock %}
+{% block page_title %}Orders{% endblock %}
+{% block page_sub %}B2B orders from organisations. Marking one paid applies its effect (e.g. adds seats). This is where a payment provider's webhook would call in.{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+            <thead>
+                <tr><th>Organisation</th><th>Item</th><th>Amount</th><th>Status</th><th>Placed</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for o in orders %}
+                <tr>
+                    <td><strong>{{ o.org_name }}</strong></td>
+                    <td>{{ o.label }}</td>
+                    <td>{{ o.currency }}{{ '{:,}'.format(o.amount) }}</td>
+                    <td>
+                        {% if o.status == 'paid' %}<span class="badge bg-green-lt">Paid</span>
+                        {% else %}<span class="badge bg-yellow-lt">Pending</span>{% endif %}
+                    </td>
+                    <td class="text-secondary">{{ o.created_at | admin_date }}</td>
+                    <td class="text-end">
+                        {% if o.status != 'paid' %}
+                        <form method="POST" onsubmit="return confirm('Mark this order paid and apply it?');">
+                            <input type="hidden" name="order_id" value="{{ o.id }}">
+                            <button class="btn btn-sm btn-primary">Mark paid</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-secondary text-center">No orders yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

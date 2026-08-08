@@ -49,12 +49,23 @@
                     {% for p in posts %}
                     <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
                         <div>
-                            <div class="fw-bold">{{ p.title }}</div>
+                            <div class="fw-bold">
+                                {{ p.title }}
+                                {% if p.sponsored %}<span class="badge bg-yellow-lt ms-1">★ Featured</span>{% endif %}
+                            </div>
                             <div class="text-secondary small">{{ [p.location, p.employment_type] | select | join(' · ') }}</div>
                         </div>
-                        <a href="{{ url_for('org_applicants', post_id=p.id) }}" class="ms-auto btn btn-sm btn-ghost-secondary">
-                            {{ applicant_counts.get(p.id, 0) }} applicant{{ '' if applicant_counts.get(p.id,0)==1 else 's' }}
-                        </a>
+                        <div class="ms-auto btn-list">
+                            <form method="POST" action="{{ url_for('org_job_sponsor', post_id=p.id) }}">
+                                <input type="hidden" name="sponsored" value="{{ '0' if p.sponsored else '1' }}">
+                                <button class="btn btn-sm {{ 'btn-ghost-secondary' if p.sponsored else 'btn-outline-warning' }}">
+                                    {{ 'Unfeature' if p.sponsored else '★ Feature' }}
+                                </button>
+                            </form>
+                            <a href="{{ url_for('org_applicants', post_id=p.id) }}" class="btn btn-sm btn-ghost-secondary">
+                                {{ applicant_counts.get(p.id, 0) }} applicant{{ '' if applicant_counts.get(p.id,0)==1 else 's' }}
+                            </a>
+                        </div>
                     </div>
                     {% else %}
                     <div class="list-group-item text-secondary text-center">No postings yet.</div>

@@ -21,7 +21,10 @@
             <div class="list-group-item">
                 <div class="d-flex flex-wrap align-items-start gap-2">
                     <div>
-                        <div class="fw-bold fs-3">{{ p.title }}</div>
+                        <div class="fw-bold fs-3">
+                            {{ p.title }}
+                            {% if p.sponsored %}<span class="badge bg-yellow-lt align-middle ms-1">★ Featured</span>{% endif %}
+                        </div>
                         <div class="text-secondary">{{ [p.location, p.employment_type] | select | join(' · ') }}</div>
                     </div>
                     {% if signed_in %}

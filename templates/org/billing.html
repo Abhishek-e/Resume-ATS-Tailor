@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% set active_page = "org" %}
+{% block title %}Billing - {{ org.name }}{% endblock %}
+
+{% block content %}
+<div class="py-3" style="max-width: 900px; margin: 0 auto;">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <div>
+            <h1 class="mb-0">Billing</h1>
+            <div class="text-secondary">{{ org.name }} · Team plan · {{ seats.used }}/{{ seats.limit }} seats used</div>
+        </div>
+        <a href="{{ url_for('org_dashboard') }}" class="ms-auto btn btn-ghost-secondary">Back to dashboard</a>
+    </div>
+
+    <div class="alert alert-info">
+        Online payment isn't enabled yet. Placing an order records your request; we confirm it
+        and activate the change. (A payment provider plugs in here later.)
+    </div>
+
+    <div class="row row-cards mb-3">
+        {% for slug, p in products.items() %}
+        <div class="col-12 col-md-6">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <h3 class="card-title">{{ p.label }}</h3>
+                    <div class="h1 my-2">{{ currency }}{{ '{:,}'.format(p.amount) }}</div>
+                    <form method="POST" class="mt-auto">
+                        <input type="hidden" name="product" value="{{ slug }}">
+                        <button class="btn btn-primary w-100">Buy</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3 class="card-title">Order history</h3></div>
+        <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+                <thead><tr><th>Item</th><th>Amount</th><th>Status</th><th>Placed</th></tr></thead>
+                <tbody>
+                    {% for o in orders %}
+                    <tr>
+                        <td>{{ o.label }}</td>
+                        <td>{{ o.currency }}{{ '{:,}'.format(o.amount) }}</td>
+                        <td>
+                            {% if o.status == 'paid' %}<span class="badge bg-green-lt">Paid</span>
+                            {% else %}<span class="badge bg-yellow-lt">Pending</span>{% endif %}
+                        </td>
+                        <td class="text-secondary">{{ o.created_at | admin_date }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="text-secondary text-center">No orders yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
