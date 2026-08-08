@@ -17,6 +17,7 @@ Collections
   org_job_posts    employer openings (kept separate from admin job_posts)
   org_applications one row per applicant per posting
 """
+import re
 import time
 import uuid
 
@@ -261,3 +262,64 @@ def applicant_counts(db, org_id) -> dict:
     for a in list_applicants(db, org_id):
         counts[a["post_id"]] = counts.get(a["post_id"], 0) + 1
     return counts
+
+
+# --- employer: candidate database search -----------------------------------
+
+def search_candidates(db, query="", location="", limit=50) -> list:
+    """Opt-in candidate profiles matching a keyword and/or location.
+
+    Privacy is the whole point: a profile is only ever returned when its owner
+    set details.recruiter_visible - so this is a directory of people who chose
+    to be found, not the whole user table. The keyword matches name, skills,
+    desired titles and the about-me blurb.
+    """
+    if db is None:
+        return []
+    q = (query or "").strip().lower()
+    loc = (location or "").strip().lower()
+
+    results = []
+    for doc in db.collection("users").stream():
+        u = doc.to_dict()
+        details = u.get("details") or {}
+        if not details.get("recruiter_visible"):
+            continue
+
+        skills_raw = details.get("skills") or ""
+        titles_raw = details.get("desired_titles") or ""
+        name = details.get("full_name") or u.get("username") or ""
+        haystack = " ".join([
+            name, skills_raw, titles_raw, details.get("about_me", ""),
+        ]).lower()
+
+        if q and q not in haystack:
+            continue
+        if loc and loc not in (details.get("location") or "").lower():
+            continue
+
+        skills = [s.strip() for s in re.split(r"[,\n;]+", skills_raw) if s.strip()]
+        titles = [t.strip() for t in re.split(r"[,\n;]+", titles_raw) if t.strip()]
+        results.append({
+            "email": u.get("email") or doc.id,
+            "name": name,
+            "headline": titles[0] if titles else "",
+            "skills": skills[:12],
+            "location": details.get("location", ""),
+            "github": details.get("github", ""),
+            "linkedin": details.get("linkedin", ""),
+        })
+
+    results.sort(key=lambda r: r["name"].lower())
+    return results[:limit]
+
+
+def candidate_pool_size(db) -> int:
+    """How many profiles are discoverable, for the empty-state copy."""
+    if db is None:
+        return 0
+    n = 0
+    for doc in db.collection("users").stream():
+        if (doc.to_dict().get("details") or {}).get("recruiter_visible"):
+            n += 1
+    return n

@@ -705,6 +705,27 @@ def org_applicants(post_id):
                            applicants=orgs.list_applicants(db, org['id'], post_id))
 
 
+@app.route('/org/candidates')
+@login_required
+def org_candidates():
+    """Recruiter search over opt-in candidate profiles (employer admins only).
+
+    Only profiles whose owner ticked 'discoverable to recruiters' are ever
+    returned; an empty query lists everyone who opted in.
+    """
+    org = _require_org_admin()
+    if org is None or org['type'] != 'employer':
+        flash('Candidate search is for employer organisations.', 'error')
+        return redirect(url_for('org_home'))
+    q = request.args.get('q', '').strip()
+    loc = request.args.get('location', '').strip()
+    return render_template(
+        'org/candidates.html', org=org, q=q, location=loc,
+        results=orgs.search_candidates(db, q, loc),
+        pool=orgs.candidate_pool_size(db),
+    )
+
+
 @app.route('/careers/<org_id>')
 def org_careers(org_id):
     """Public careers page for an employer org; the shareable apply link."""
@@ -1696,6 +1717,9 @@ def profile_details_save():
         'phone': (data.get('phone') or '').strip(),
         'skills': (data.get('skills') or '').strip(),
         'desired_titles': (data.get('desired_titles') or '').strip(),
+        # Opt-in: when true this profile appears in employer candidate search.
+        # Defaults false, so nobody is exposed to recruiters without choosing to.
+        'recruiter_visible': bool(data.get('recruiter_visible')),
     }
     db.collection('users').document(session['user_id']).update({'details': details})
     return jsonify({"ok": True, "details": details})
