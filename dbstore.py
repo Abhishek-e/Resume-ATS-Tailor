@@ -287,7 +287,12 @@ def _connect_from_url(url):
             password=unquote(parsed.password or ""),
             database=(parsed.path or "/").lstrip("/"),
             charset="utf8mb4",
-            autocommit=False,
+            # autocommit is essential: with a long-lived connection and InnoDB's
+            # default REPEATABLE READ, a non-autocommit read transaction keeps a
+            # frozen snapshot and never sees rows another connection commits
+            # (e.g. the seed script, or a second worker). autocommit makes every
+            # statement its own transaction, so reads always see latest-committed.
+            autocommit=True,
         )
         return conn, "mysql"
 
