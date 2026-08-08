@@ -193,7 +193,7 @@ def record_application(db, user_id: str, job: dict, status: str,
 def list_applications(db, user_id: str) -> list[dict]:
     if db is None:
         return []
-    from google.cloud.firestore_v1.base_query import FieldFilter
+    from dbstore import FieldFilter
 
     docs = db.collection("applications").where(
         filter=FieldFilter("user_id", "==", user_id)

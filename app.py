@@ -12,22 +12,26 @@ from urllib.parse import quote_plus
 from docx import Document
 from docx.shared import Pt, RGBColor
 from dotenv import load_dotenv
+
+import dbstore
+# The datastore is MariaDB (or SQLite for local dev) via a Firestore-compatible
+# shim. `firestore` is kept as a name so the handful of
+# `firestore.SERVER_TIMESTAMP` writes below work unchanged, and FieldFilter is
+# re-exported for the two equality queries that use it.
+firestore = dbstore
+FieldFilter = dbstore.FieldFilter
+
+# Google sign-in uses Firebase Authentication, which is independent of where the
+# application data lives. It stays optional: without firebase-admin installed
+# (e.g. on the ARMv6 Pi, whose grpcio dependency will not build) the Google
+# button is simply hidden and email/password sign-in is unaffected.
 try:
     import firebase_admin
-    from firebase_admin import auth as firebase_auth, credentials, firestore
-    from google.cloud.firestore_v1.base_query import FieldFilter
+    from firebase_admin import auth as firebase_auth, credentials
 except ImportError:
-    # Firebase Admin (and its heavy grpcio dependency) is optional. Where it
-    # cannot be installed - e.g. an ARMv6 Pi with no prebuilt grpcio wheel - the
-    # app runs in a no-accounts mode: registration, login, Google sign-in,
-    # saving and profile are unavailable, everything else works. Every
-    # DB-backed route already short-circuits on `db is None`, which is exactly
-    # the state these fallbacks produce.
     firebase_admin = None
     firebase_auth = None
     credentials = None
-    firestore = None
-    FieldFilter = None
 from flask import (
     Flask, abort, jsonify, render_template, request, redirect, url_for,
     flash, send_file, session,
@@ -132,33 +136,43 @@ def _openrouter_generate(prompt, json_mode=False):
     return completion.choices[0].message.content
 
 
-def _init_firestore():
+def _init_db():
     """
-    Loads Firebase Admin SDK credentials from either a JSON blob in
-    FIREBASE_CREDENTIALS_JSON (used on Render, set as a secret env var) or a
-    service account key file on disk (used locally). Returns None instead of
-    raising if neither is configured yet, so the rest of the app can still
-    run and surface a clear error only when a DB-backed route is hit.
+    Connect to the datastore (MariaDB in production, SQLite for local dev) via
+    the Firestore-compatible shim in dbstore, selected by DATABASE_URL. Returns
+    None when DATABASE_URL is unset or unreachable, so the app still serves its
+    public, no-account pages and surfaces a clear error only when a DB-backed
+    route is hit - the same contract the old Firestore init had.
     """
-    if firebase_admin is None:
-        print("[WARN] firebase_admin not installed - running without accounts/Firestore.")
-        return None
+    return dbstore.connect()
+
+
+def _init_google_auth():
+    """
+    Initialise Firebase Admin purely for verifying Google sign-in tokens. This
+    is independent of the datastore (data lives in MariaDB now). No-op when
+    firebase-admin is not installed or no service-account credentials are
+    present, in which case the Google button is hidden and email/password
+    sign-in is unaffected.
+    """
+    if firebase_admin is None or firebase_admin._apps:
+        return
     try:
-        if not firebase_admin._apps:
-            cred_json = os.environ.get("FIREBASE_CREDENTIALS_JSON")
-            if cred_json:
-                cred = credentials.Certificate(json.loads(cred_json))
-            else:
-                cred_path = os.environ.get("FIREBASE_CREDENTIALS_PATH", "serviceAccountKey.json")
-                cred = credentials.Certificate(cred_path)
-            firebase_admin.initialize_app(cred)
-        return firestore.client()
-    except Exception as e:
-        print(f"[WARN] Firebase/Firestore not configured: {e}")
-        return None
+        cred_json = os.environ.get("FIREBASE_CREDENTIALS_JSON")
+        if cred_json:
+            cred = credentials.Certificate(json.loads(cred_json))
+        else:
+            cred_path = os.environ.get("FIREBASE_CREDENTIALS_PATH", "serviceAccountKey.json")
+            if not os.path.exists(cred_path):
+                return
+            cred = credentials.Certificate(cred_path)
+        firebase_admin.initialize_app(cred)
+    except Exception as e:  # noqa: BLE001 - Google sign-in is optional
+        print(f"[WARN] Google sign-in unavailable: {e}")
 
 
-db = _init_firestore()
+db = _init_db()
+_init_google_auth()
 adminstore.ensure_admin(db)
 
 
@@ -532,7 +546,7 @@ def auth_google():
     account. Nothing here trusts the email the page claims - it is read out of
     the verified token.
     """
-    if not FIREBASE_WEB_API_KEY:
+    if not FIREBASE_WEB_API_KEY or firebase_auth is None:
         return jsonify({"error": "Google sign-in is not configured on this server."}), 503
     if db is None:
         return jsonify({"error": "Database is not configured on the server."}), 503

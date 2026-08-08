@@ -3,10 +3,18 @@ gunicorn
 python-dotenv
 google-genai
 openai
-firebase-admin
 xhtml2pdf
 python-docx
 pypdf
+
+# Datastore: MariaDB/MySQL via the Firestore-compatible shim in dbstore.py.
+# Pure Python, so it installs on the ARMv6 Pi (unlike firebase-admin's grpcio).
+PyMySQL
+
+# Optional: Google sign-in (Firebase Authentication) only. Not required for the
+# datastore or email/password sign-in. Skipped on hosts where its grpcio
+# dependency will not build (e.g. the ARMv6 Pi); install separately if wanted:
+#   firebase-admin
 
 # Find Jobs board connectors. The assisted-apply flow is pure stdlib on top of
 # these - no browser engine, so nothing here needs system packages.
