@@ -21,17 +21,16 @@ import dbstore
 firestore = dbstore
 FieldFilter = dbstore.FieldFilter
 
-# Google sign-in uses Firebase Authentication, which is independent of where the
-# application data lives. It stays optional: without firebase-admin installed
-# (e.g. on the ARMv6 Pi, whose grpcio dependency will not build) the Google
-# button is simply hidden and email/password sign-in is unaffected.
+# Google sign-in verifies the ID token server-side with google-auth - pure
+# Python (installs on the ARMv6 Pi), no Firebase. google-auth ships as a
+# dependency of google-genai; guarded so the app still runs if it is absent, in
+# which case the Google button is hidden and email/password sign-in is unaffected.
 try:
-    import firebase_admin
-    from firebase_admin import auth as firebase_auth, credentials
+    from google.oauth2 import id_token as google_id_token
+    from google.auth.transport import requests as google_auth_requests
 except ImportError:
-    firebase_admin = None
-    firebase_auth = None
-    credentials = None
+    google_id_token = None
+    google_auth_requests = None
 from flask import (
     Flask, abort, jsonify, render_template, request, redirect, url_for,
     flash, send_file, session,
@@ -82,45 +81,26 @@ openrouter_client = OpenAI(
 
 RESUME_TEMPLATES = resumetemplates.VALID_TEMPLATES
 
-# Firebase Authentication, Google provider.
-#
-# The web config below is public by design - it ships in the page source of
-# every Firebase app and is not a credential. What actually protects the flow
-# is that the browser only ever returns a signed ID token, which the server
-# verifies with the service account already loaded above. Access is controlled
-# in the Firebase console (authorised domains + enabled providers), not by
-# keeping these values quiet.
-#
-# Unset the API key and the Google button simply is not rendered; email
-# sign-in is unaffected.
-FIREBASE_WEB_API_KEY = os.environ.get("FIREBASE_WEB_API_KEY", "").strip()
-FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "").strip()
-FIREBASE_AUTH_DOMAIN = os.environ.get("FIREBASE_AUTH_DOMAIN", "").strip()
+# Sign in with Google (Google Identity Services). The client id below is public
+# by design - it ships in the page source and is not a credential. What protects
+# the flow is that the browser only ever returns a signed ID token, which
+# /auth/google verifies server-side with google-auth. Access is controlled by
+# the authorised JavaScript origins on the OAuth client, not by keeping this
+# quiet. Unset -> the Google button is not rendered; email sign-in is unaffected.
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 
 
-def _firebase_web_config():
+def _google_client_id():
     """
-    Client config for the Firebase JS SDK.
+    The OAuth 2.0 Web client ID for the Sign in with Google button, or None.
 
-    project id and auth domain are derived from the service account when they
-    are not set explicitly, so the only value that has to be supplied by hand
-    is the web API key.
+    Public by design - it ships in the page source. Reuse the Firebase project's
+    auto-created web client ID (Firebase console > Project settings), or a fresh
+    one from Google Cloud Console, with the site's origin listed as an authorised
+    JavaScript origin. Unset -> the Google button is not rendered and
+    email/password sign-in is unaffected.
     """
-    if not FIREBASE_WEB_API_KEY:
-        return None
-
-    project_id = FIREBASE_PROJECT_ID
-    if not project_id:
-        try:
-            project_id = firebase_admin.get_app().project_id or ""
-        except Exception:
-            project_id = ""
-
-    return {
-        "apiKey": FIREBASE_WEB_API_KEY,
-        "authDomain": FIREBASE_AUTH_DOMAIN or (f"{project_id}.firebaseapp.com" if project_id else ""),
-        "projectId": project_id,
-    }
+    return GOOGLE_CLIENT_ID or None
 
 
 def _openrouter_generate(prompt, json_mode=False):
@@ -148,32 +128,7 @@ def _init_db():
     return dbstore.connect()
 
 
-def _init_google_auth():
-    """
-    Initialise Firebase Admin purely for verifying Google sign-in tokens. This
-    is independent of the datastore (data lives in MariaDB now). No-op when
-    firebase-admin is not installed or no service-account credentials are
-    present, in which case the Google button is hidden and email/password
-    sign-in is unaffected.
-    """
-    if firebase_admin is None or firebase_admin._apps:
-        return
-    try:
-        cred_json = os.environ.get("FIREBASE_CREDENTIALS_JSON")
-        if cred_json:
-            cred = credentials.Certificate(json.loads(cred_json))
-        else:
-            cred_path = os.environ.get("FIREBASE_CREDENTIALS_PATH", "serviceAccountKey.json")
-            if not os.path.exists(cred_path):
-                return
-            cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred)
-    except Exception as e:  # noqa: BLE001 - Google sign-in is optional
-        print(f"[WARN] Google sign-in unavailable: {e}")
-
-
 db = _init_db()
-_init_google_auth()
 adminstore.ensure_admin(db)
 
 
@@ -438,7 +393,7 @@ def _render_auth(mode):
         'auth.html',
         mode=mode,
         next=request.args.get('next', ''),
-        firebase_config=_firebase_web_config(),
+        google_client_id=_google_client_id(),
         # Plan chooser on the register panel. `?plan=` (from a pricing card)
         # pre-selects a tier; anything unknown normalises to free, which is the
         # default anyway.
@@ -539,26 +494,28 @@ def login():
 @app.route('/auth/google', methods=['POST'])
 def auth_google():
     """
-    Verifies a Firebase ID token and signs the user in, registering them on
-    first use.
+    Verifies a Google Identity Services ID token and signs the user in,
+    registering them in MySQL on first use.
 
-    The browser does the Google popup and hands back a token; this checks the
-    signature and audience against our own Firebase project using the service
-    account. Nothing here trusts the email the page claims - it is read out of
-    the verified token.
+    The browser renders the Google button and hands back a signed ID token; this
+    verifies its signature and audience against our OAuth client id using the
+    pure-Python google-auth library (no Firebase). Nothing here trusts the email
+    the page claims - it is read out of the verified token.
     """
-    if not FIREBASE_WEB_API_KEY or firebase_auth is None:
+    if not GOOGLE_CLIENT_ID or google_id_token is None:
         return jsonify({"error": "Google sign-in is not configured on this server."}), 503
     if db is None:
         return jsonify({"error": "Database is not configured on the server."}), 503
 
-    credential = (request.get_json(silent=True) or {}).get('credential')
+    body = request.get_json(silent=True) or {}
+    credential = body.get('credential')
     if not credential:
         return jsonify({"error": "Missing sign-in token."}), 400
 
     try:
-        claims = firebase_auth.verify_id_token(credential)
-    except Exception as e:
+        claims = google_id_token.verify_oauth2_token(
+            credential, google_auth_requests.Request(), GOOGLE_CLIENT_ID)
+    except Exception as e:  # noqa: BLE001 - bad/expired token or wrong audience
         return jsonify({"error": f"Could not verify that Google account: {e}"}), 401
 
     if not claims.get('email'):
@@ -571,21 +528,26 @@ def auth_google():
     doc = user_ref.get()
 
     if doc.exists:
+        # Backfill the Google subject id on an account that first signed up with
+        # a password, so the two are linked.
         user = doc.to_dict()
+        if not user.get('google_sub'):
+            user_ref.update({'google_sub': claims.get('sub', '')})
     else:
-        # No password field: this account can only ever be reached through
+        # No password field: a Google-created account is reached only through
         # Google, and /login says so rather than failing as a bad password.
         user = {
             'username': claims.get('name') or email.split('@')[0],
             'email': email,
             'auth_provider': 'google',
+            'google_sub': claims.get('sub', ''),
             'plan': plans.DEFAULT_PLAN,
             'created_at': firestore.SERVER_TIMESTAMP,
         }
         user_ref.set(user)
 
     _start_session(email, user)
-    target = _safe_next((request.get_json(silent=True) or {}).get('next'))
+    target = _safe_next(body.get('next'))
     return jsonify({"redirect": target or url_for('home')})
 
 
