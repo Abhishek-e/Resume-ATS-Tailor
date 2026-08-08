@@ -2912,7 +2912,13 @@ def _warm_caches():
     The catalogue renders all ten templates and is otherwise built lazily on the
     first /generate-cv request, costing ~6s on that request. Warming it in a
     background thread at import means the first visitor doesn't pay for it.
+
+    Skippable via WARM_CACHES=false: on a single-core host (the Pi Zero) doing
+    this at boot saturates the one CPU for ~a minute and makes early requests
+    time out, so there the ~6s is better paid on the first /generate-cv.
     """
+    if os.environ.get("WARM_CACHES", "true").lower() == "false":
+        return
     try:
         with app.app_context():
             _resume_catalogue()
