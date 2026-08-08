@@ -1,0 +1,91 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_job_alert" %}
+{% block title %}Job alert email{% endblock %}
+{% block page_title %}Weekly job-alert email{% endblock %}
+{% block page_sub %}Build a digest from the live aggregator and send it to registered users. Nothing sends until you click a button.{% endblock %}
+
+{% block content %}
+<div class="row row-cards">
+    <!-- Status + actions -->
+    <div class="col-12 col-lg-5">
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Send</h3></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between py-1">
+                        <span class="text-secondary">Registered recipients</span>
+                        <strong>{{ recipient_count }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between py-1">
+                        <span class="text-secondary">Jobs in this digest</span>
+                        <strong>{{ digest.count }} <span class="text-secondary fw-normal">of {{ total_jobs }} live</span></strong>
+                    </div>
+                    <div class="d-flex justify-content-between py-1">
+                        <span class="text-secondary">SMTP</span>
+                        {% if smtp_ready %}
+                            <span class="badge bg-green-lt">Ready — {{ smtp_from }}</span>
+                        {% else %}
+                            <span class="badge bg-red-lt">Not configured</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if not smtp_ready %}
+                <div class="alert alert-warning">
+                    Set <code>SMTP_HOST</code>, <code>SMTP_FROM</code> (and usually
+                    <code>SMTP_USER</code> / <code>SMTP_PASS</code>) in <code>.env</code>,
+                    then restart the app. Sending is disabled until then.
+                </div>
+                {% endif %}
+
+                <form method="POST" class="mb-2">
+                    <input type="hidden" name="action" value="test">
+                    <button type="submit" class="btn w-100"
+                            {% if not smtp_ready or digest.count == 0 %}disabled{% endif %}>
+                        Send test to me ({{ admin_email }})
+                    </button>
+                </form>
+
+                <form method="POST"
+                      onsubmit="return confirm('Send this job alert to all {{ recipient_count }} registered users?');">
+                    <input type="hidden" name="action" value="send">
+                    <button type="submit" class="btn btn-primary w-100"
+                            {% if not smtp_ready or digest.count == 0 or recipient_count == 0 %}disabled{% endif %}>
+                        Send to all {{ recipient_count }} users
+                    </button>
+                </form>
+
+                <p class="text-secondary small mb-0 mt-3">
+                    Recipients are placed in Bcc, so nobody sees the others' addresses.
+                    Send a test to yourself first.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="col-12 col-lg-7">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Preview</h3>
+                <div class="card-subtitle text-truncate">Subject: {{ digest.subject }}</div>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for job in preview_jobs %}
+                <div class="list-group-item">
+                    <div class="fw-bold">{{ job.title }}</div>
+                    <div class="text-secondary">{{ job.company }}</div>
+                    <div class="text-secondary small">
+                        {{ [job.location, job.source, job.category] | select | join(' · ') }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="list-group-item text-secondary">
+                    No jobs available right now. Refresh listings on the Find Jobs page and reload.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -70,6 +70,34 @@
                            minlength="6" required>
                 </div>
 
+                {# Plan chooser. Free is checked by default (selected_plan is
+                   'free' unless a pricing card passed ?plan=). Paid plans just
+                   record the choice on the account - no billing step. #}
+                <div class="mb-3">
+                    <label class="form-label">Choose your plan</label>
+                    <div class="plan-choices">
+                        {% for plan in plans %}
+                        <label class="plan-choice">
+                            <input type="radio" name="plan" value="{{ plan.slug }}"
+                                   {% if plan.slug == selected_plan %}checked{% endif %}>
+                            <span class="plan-choice-body">
+                                <span class="plan-choice-head">
+                                    <span class="plan-choice-name">{{ plan.name }}</span>
+                                    <span class="plan-choice-price">{{ plan.price }}
+                                        <span class="text-secondary">{{ plan.price_sub }}</span>
+                                    </span>
+                                </span>
+                                <span class="plan-choice-tag text-secondary">{{ plan.cycle }}</span>
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div class="form-hint">
+                        Free is active by default — you can change plans anytime from
+                        <a href="{{ url_for('pricing') }}">Pricing</a>.
+                    </div>
+                </div>
+
                 <button type="submit" class="btn btn-primary w-100">Get started</button>
 
                 <p class="auth-switch d-lg-none">

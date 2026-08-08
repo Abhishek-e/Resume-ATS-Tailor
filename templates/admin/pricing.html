@@ -1,0 +1,128 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_pricing" %}
+{% block title %}Set Pricing{% endblock %}
+{% block page_title %}Set Pricing{% endblock %}
+{% block page_sub %}Edit plan prices and run a time-boxed promotional offer. Changes hit the public Pricing page immediately.{% endblock %}
+
+{% block content %}
+<form method="POST">
+<div class="row row-cards">
+
+    <!-- Plan prices -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Plan prices</h3>
+                <div class="card-subtitle">Leave a field blank to use the built-in default for that plan.</div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th>Plan</th>
+                            <th>Price</th>
+                            <th>Sub-label</th>
+                            <th>Billing / cycle line</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            <td class="w-1"><strong>{{ row.name }}</strong></td>
+                            <td>
+                                <input type="text" name="price_{{ row.slug }}" class="form-control"
+                                       value="{{ row.price }}" placeholder="{{ row.default.price }}">
+                            </td>
+                            <td>
+                                <input type="text" name="price_sub_{{ row.slug }}" class="form-control"
+                                       value="{{ row.price_sub }}" placeholder="{{ row.default.price_sub }}">
+                            </td>
+                            <td>
+                                <input type="text" name="cycle_{{ row.slug }}" class="form-control"
+                                       value="{{ row.cycle }}" placeholder="{{ row.default.cycle }}">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Promotional offer -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                <h3 class="card-title mb-0">Promotional offer</h3>
+                {% if promo_active %}
+                    <span class="badge bg-green-lt">Live now</span>
+                {% elif promo.label %}
+                    <span class="badge bg-secondary-lt">Configured, not in window</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <p class="text-secondary">
+                    A single offer shown as a banner on the Pricing page while it is within its
+                    timeframe. Set a promo price to show a struck-through discount on the targeted plan(s).
+                    Clear the <strong>label</strong> and save to remove the offer entirely.
+                </p>
+
+                <div class="row">
+                    <div class="col-12 col-md-8 mb-3">
+                        <label class="form-label" for="promo-label">Offer label</label>
+                        <input type="text" id="promo-label" name="promo_label" class="form-control"
+                               value="{{ promo.label or '' }}" maxlength="80"
+                               placeholder="e.g. Freshers Week — 30% off Pro">
+                    </div>
+                    <div class="col-12 col-md-4 mb-3">
+                        <label class="form-label" for="promo-plan">Applies to</label>
+                        <select id="promo-plan" name="promo_plan" class="form-select">
+                            {% for value, label in plan_options %}
+                            <option value="{{ value }}"
+                                {% if (promo.plan or 'all') == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-12 mb-3">
+                        <label class="form-label" for="promo-desc">Description</label>
+                        <input type="text" id="promo-desc" name="promo_description" class="form-control"
+                               value="{{ promo.description or '' }}" maxlength="160"
+                               placeholder="Short line shown under the label on the banner.">
+                    </div>
+
+                    <div class="col-12 col-md-4 mb-3">
+                        <label class="form-label" for="promo-price">Promo price (optional)</label>
+                        <input type="text" id="promo-price" name="promo_price" class="form-control"
+                               value="{{ promo.promo_price or '' }}"
+                               placeholder="e.g. ₹199">
+                        <div class="form-hint">Shown in place of the normal price on targeted plan(s).</div>
+                    </div>
+                    <div class="col-12 col-md-4 mb-3">
+                        <label class="form-label" for="promo-start">Starts (UTC)</label>
+                        <input type="datetime-local" id="promo-start" name="promo_start"
+                               class="form-control" value="{{ promo_start_input }}">
+                        <div class="form-hint">Blank = active immediately.</div>
+                    </div>
+                    <div class="col-12 col-md-4 mb-3">
+                        <label class="form-label" for="promo-end">Ends (UTC)</label>
+                        <input type="datetime-local" id="promo-end" name="promo_end"
+                               class="form-control" value="{{ promo_end_input }}">
+                        <div class="form-hint">Blank = no end date.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Save pricing</button>
+            <a href="{{ url_for('pricing') }}" target="_blank" class="btn btn-ghost-secondary">
+                View public page
+            </a>
+        </div>
+    </div>
+</div>
+</form>
+{% endblock %}

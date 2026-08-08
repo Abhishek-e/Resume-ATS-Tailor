@@ -2,17 +2,32 @@ import io
 import json
 import os
 import re
+import threading
+
 import requests
 from datetime import datetime, timezone
 from functools import wraps
 from urllib.parse import quote_plus
 
-import firebase_admin
 from docx import Document
 from docx.shared import Pt, RGBColor
 from dotenv import load_dotenv
-from firebase_admin import auth as firebase_auth, credentials, firestore
-from google.cloud.firestore_v1.base_query import FieldFilter
+try:
+    import firebase_admin
+    from firebase_admin import auth as firebase_auth, credentials, firestore
+    from google.cloud.firestore_v1.base_query import FieldFilter
+except ImportError:
+    # Firebase Admin (and its heavy grpcio dependency) is optional. Where it
+    # cannot be installed - e.g. an ARMv6 Pi with no prebuilt grpcio wheel - the
+    # app runs in a no-accounts mode: registration, login, Google sign-in,
+    # saving and profile are unavailable, everything else works. Every
+    # DB-backed route already short-circuits on `db is None`, which is exactly
+    # the state these fallbacks produce.
+    firebase_admin = None
+    firebase_auth = None
+    credentials = None
+    firestore = None
+    FieldFilter = None
 from flask import (
     Flask, abort, jsonify, render_template, request, redirect, url_for,
     flash, send_file, session,
@@ -36,6 +51,9 @@ import sitemedia
 import jobsources
 import jobstore
 import prepsets
+import plans
+import mailer
+import jobalert
 
 load_dotenv()
 
@@ -122,6 +140,9 @@ def _init_firestore():
     raising if neither is configured yet, so the rest of the app can still
     run and surface a clear error only when a DB-backed route is hit.
     """
+    if firebase_admin is None:
+        print("[WARN] firebase_admin not installed - running without accounts/Firestore.")
+        return None
     try:
         if not firebase_admin._apps:
             cred_json = os.environ.get("FIREBASE_CREDENTIALS_JSON")
@@ -403,6 +424,11 @@ def _render_auth(mode):
         mode=mode,
         next=request.args.get('next', ''),
         firebase_config=_firebase_web_config(),
+        # Plan chooser on the register panel. `?plan=` (from a pricing card)
+        # pre-selects a tier; anything unknown normalises to free, which is the
+        # default anyway.
+        plans=plans.list_plans(),
+        selected_plan=plans.normalize(request.args.get('plan')),
     )
 
 
@@ -426,6 +452,10 @@ def _start_session(email, user):
     # Carried in the session so the announcement bell costs no Firestore read
     # per page; persisted on the user when dismissed.
     session['ann_seen_at'] = user.get('ann_seen_at', 0)
+    # Current subscription tier, so the nav and pricing page can reflect it
+    # without a Firestore read per page. Defaults to free for older accounts
+    # created before plans existed.
+    session['plan'] = plans.normalize(user.get('plan'))
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -438,6 +468,9 @@ def register():
         username = request.form['username']
         email = request.form['email'].strip().lower()
         password = request.form['password']
+        # Plan picked on the register form; free is the default and the only
+        # tier a brand-new account can be on without a paid step later.
+        plan = plans.normalize(request.form.get('plan'))
 
         user_ref = db.collection('users').document(email)
         if user_ref.get().exists:
@@ -448,9 +481,14 @@ def register():
                 'email': email,
                 'password': generate_password_hash(password),
                 'auth_provider': 'password',
+                'plan': plan,
                 'created_at': firestore.SERVER_TIMESTAMP,
             })
-            flash('Registration successful! Please login.', 'success')
+            picked = plans.display_name(plan)
+            if plan == plans.DEFAULT_PLAN:
+                flash('Registration successful! Please login.', 'success')
+            else:
+                flash(f'Account created on the {picked} plan. Please login to continue.', 'success')
             return redirect(url_for('login'))
 
     return _render_auth('register')
@@ -526,6 +564,7 @@ def auth_google():
             'username': claims.get('name') or email.split('@')[0],
             'email': email,
             'auth_provider': 'google',
+            'plan': plans.DEFAULT_PLAN,
             'created_at': firestore.SERVER_TIMESTAMP,
         }
         user_ref.set(user)
@@ -540,6 +579,45 @@ def logout():
     session.clear()
     flash('You have been logged out.', 'success')
     return redirect(url_for('home'))
+
+
+@app.route('/pricing')
+def pricing():
+    """Public plans & pricing page.
+
+    Prices and any live promotional offer are merged from the admin panel over
+    the defaults in plans.py, so an admin can change them without a deploy.
+    Signed-in users see their current tier highlighted with a switch button.
+    """
+    view = adminstore.pricing_view(db, plans)
+    return render_template(
+        'pricing.html',
+        plan_cards=view['cards'],
+        features=plans.FEATURES,
+        footnote=plans.FOOTNOTE,
+        promo=view['promo'],
+        current_plan=session.get('plan') if session.get('user_id') else None,
+    )
+
+
+@app.route('/account/plan', methods=['POST'])
+@login_required
+def account_plan():
+    """Switch the signed-in user's plan. No billing - records the choice.
+
+    Reachable from the pricing cards when logged in; a guest is sent to the
+    register form with the plan pre-selected instead (handled in the template).
+    """
+    if db is None:
+        return jsonify({"error": "Accounts are not available on this server."}), 503
+
+    plan = plans.normalize((request.get_json(silent=True) or request.form).get('plan'))
+    db.collection('users').document(session['user_id']).update({'plan': plan})
+    session['plan'] = plan
+    if request.is_json:
+        return jsonify({"ok": True, "plan": plan, "name": plans.display_name(plan)})
+    flash(f'You are now on the {plans.display_name(plan)} plan.', 'success')
+    return redirect(url_for('pricing'))
 
 
 def _user_job_profile(details):
@@ -583,16 +661,14 @@ def jobs():
     all_jobs = jobstore.all_jobs()
     state = jobstore.cache_state()
 
-    # First visit after a restart has an empty cache - pull one set so the page
-    # is never blank, rather than making the user guess they must click Fetch.
+    # First visit after a restart has an empty cache. A cold multi-board fetch
+    # takes ~2 min on a small host, so warm it in the background and render the
+    # page immediately with a "fetching" state that reloads itself, rather than
+    # blocking the request until every board answers.
+    jobs_warming = False
     if not all_jobs:
-        try:
-            fetched, errors = _fetch_live_jobs()
-            jobstore.store_jobs(fetched, errors)
-            all_jobs = jobstore.all_jobs()
-            state = jobstore.cache_state()
-        except Exception as exc:  # noqa: BLE001
-            state['errors'] = [str(exc)]
+        jobstore.warm_async(_fetch_live_jobs)
+        jobs_warming = jobstore.is_warming()
 
     jobsources.score_jobs(all_jobs, profile)
     applied_ids = jobstore.applied_job_ids(db, user_id) if user_id else set()
@@ -611,6 +687,7 @@ def jobs():
     return render_template(
         'jobs.html',
         jobs=results,
+        jobs_warming=jobs_warming,
         total_cached=state['count'],
         fetched_at=state['fetched_at'],
         is_stale=state['is_stale'],
@@ -1954,12 +2031,6 @@ def plagiarism_checker_download_pdf():
     )
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    debug_mode = os.environ.get("FLASK_DEBUG", "true").lower() == "true"
-    app.run(host="0.0.0.0", port=port, debug=debug_mode)
-
-
 # --- ADMIN PANEL -----------------------------------------------------------
 # Unlinked by design: nothing in the public navigation points at /admin, so it
 # is reached by typing the URL. That is obscurity, not access control - the
@@ -2112,6 +2183,150 @@ def admin_settings():
         settings=adminstore.get_settings(db),
         images=sitemedia.overview(db),
         image_bytes=sitemedia.total_bytes(db),
+    )
+
+
+def _epoch_to_local_input(epoch) -> str:
+    """Epoch float -> value for a <input type="datetime-local"> (UTC), or ''."""
+    if not epoch:
+        return ''
+    return datetime.fromtimestamp(float(epoch), tz=timezone.utc).strftime('%Y-%m-%dT%H:%M')
+
+
+def _local_input_to_epoch(text) -> float:
+    """A datetime-local string (read as UTC) -> epoch float. 0 when blank/invalid."""
+    text = (text or '').strip()
+    if not text:
+        return 0.0
+    try:
+        return datetime.fromisoformat(text).replace(tzinfo=timezone.utc).timestamp()
+    except ValueError:
+        return 0.0
+
+
+@app.route('/admin/pricing', methods=['GET', 'POST'])
+@admin_required
+def admin_pricing():
+    """Edit plan prices and run a time-boxed promotional offer.
+
+    Prices are overrides on top of the code defaults (blank = use default), so
+    the form is always seeded with what the public page currently shows.
+    """
+    if request.method == 'POST':
+        overrides = {}
+        for plan in plans.list_plans():
+            slug = plan['slug']
+            overrides[slug] = {
+                'price': request.form.get(f'price_{slug}', ''),
+                'price_sub': request.form.get(f'price_sub_{slug}', ''),
+                'cycle': request.form.get(f'cycle_{slug}', ''),
+            }
+        promo = {
+            'label': request.form.get('promo_label', ''),
+            'description': request.form.get('promo_description', ''),
+            'plan': plans.normalize(request.form.get('promo_plan')) if request.form.get('promo_plan') not in (None, '', 'all') else 'all',
+            'promo_price': request.form.get('promo_price', ''),
+            'start': _local_input_to_epoch(request.form.get('promo_start')),
+            'end': _local_input_to_epoch(request.form.get('promo_end')),
+        }
+        adminstore.save_pricing(db, overrides, promo)
+        flash('Pricing saved — it applies to the public page immediately.', 'success')
+        return redirect(url_for('admin_pricing'))
+
+    stored = adminstore.get_pricing(db)
+    overrides = stored.get('overrides') or {}
+    promo = stored.get('promo') or {}
+    # Seed each plan row with the override if set, else the default value, so
+    # the admin sees and edits the exact numbers the page is showing.
+    rows = []
+    for plan in plans.list_plans():
+        ov = overrides.get(plan['slug']) or {}
+        rows.append({
+            'slug': plan['slug'],
+            'name': plan['name'],
+            'default': plan,
+            'price': ov.get('price') or plan['price'],
+            'price_sub': ov.get('price_sub') or plan['price_sub'],
+            'cycle': ov.get('cycle') or plan['cycle'],
+        })
+    return render_template(
+        'admin/pricing.html',
+        rows=rows,
+        promo=promo,
+        promo_active=adminstore.promo_is_active(promo),
+        promo_start_input=_epoch_to_local_input(promo.get('start')),
+        promo_end_input=_epoch_to_local_input(promo.get('end')),
+        plan_options=[('all', 'All plans')] + [(p['slug'], p['name']) for p in plans.list_plans()],
+    )
+
+
+@app.route('/admin/job-alert', methods=['GET', 'POST'])
+@admin_required
+def admin_job_alert():
+    """Compose and send the weekly job-alert email to registered users.
+
+    The digest is built from the aggregator's current listings (jobstore). Two
+    send actions: a test to the admin's own address, or the full send to every
+    registered user. Sending only ever happens on this POST - there is no
+    automatic dispatch anywhere.
+    """
+    jobs = jobstore.all_jobs()
+    if not jobs:
+        # Warm the cache once so the preview and any send have listings to use.
+        try:
+            fetched, errors = _fetch_live_jobs()
+            jobstore.store_jobs(fetched, errors)
+            jobs = jobstore.all_jobs()
+        except Exception:  # noqa: BLE001 - preview still renders with 0 jobs
+            jobs = []
+
+    app_name = adminstore.get_settings(db)['app_name']
+    digest = jobalert.build_digest(
+        jobs, app_name=app_name, jobs_url=url_for('jobs', _external=True))
+    recipients = [u['email'] for u in adminstore.list_users(db) if u.get('email')]
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if not mailer.is_configured():
+            flash('SMTP is not configured. Set SMTP_HOST and SMTP_FROM in .env first.', 'error')
+            return redirect(url_for('admin_job_alert'))
+        if digest['count'] == 0:
+            flash('No jobs to send right now — refresh listings and try again.', 'error')
+            return redirect(url_for('admin_job_alert'))
+
+        if action == 'test':
+            targets = [session['admin_email']]
+        elif action == 'send':
+            targets = recipients
+        else:
+            flash('Unknown action.', 'error')
+            return redirect(url_for('admin_job_alert'))
+
+        if not targets:
+            flash('No recipients to send to.', 'error')
+            return redirect(url_for('admin_job_alert'))
+
+        try:
+            sent = mailer.send(targets, digest['subject'], digest['text'], digest['html'])
+        except Exception as e:  # noqa: BLE001 - report any SMTP failure to the admin
+            flash(f'Send failed: {e}', 'error')
+            return redirect(url_for('admin_job_alert'))
+
+        if action == 'test':
+            flash(f'Test job alert sent to {session["admin_email"]}.', 'success')
+        else:
+            flash(f'Weekly job alert sent to {sent} recipient(s).', 'success')
+        return redirect(url_for('admin_job_alert'))
+
+    return render_template(
+        'admin/job_alert.html',
+        digest=digest,
+        preview_jobs=jobalert.select_jobs(jobs, jobalert.DEFAULT_LIMIT),
+        total_jobs=len(jobs),
+        recipient_count=len(recipients),
+        smtp_ready=mailer.is_configured(),
+        smtp_from=mailer.config()['from'],
+        admin_email=session.get('admin_email', ''),
     )
 
 
@@ -2523,3 +2738,58 @@ def linkedin_optimizer():
 
     return render_template('linkedin.html', report=report, profile=profile,
                            rewrites=rewrites, metrics=linkedinopt.WEIGHTS)
+
+
+@app.after_request
+def _cache_immutable_assets(response):
+    """Long-cache the vendored front-end bundle (Tabler CSS/JS, fonts).
+
+    These files are shipped with the app and never change between deploys, so a
+    30-day immutable cache saves re-downloading ~hundreds of KB on every repeat
+    visit - the biggest per-page transfer on a small host. The app's own
+    style.css and scripts are left on the default revalidating policy so edits
+    still show up immediately.
+    """
+    if request.path.startswith('/static/vendor/'):
+        # Override rather than setdefault: Flask's static handler already sets a
+        # Cache-Control ("no-cache" when SEND_FILE_MAX_AGE_DEFAULT is unset), so
+        # a setdefault would be a no-op.
+        response.headers['Cache-Control'] = 'public, max-age=2592000, immutable'
+    return response
+
+
+def _warm_caches():
+    """Pre-render the resume-template catalogue once at startup.
+
+    The catalogue renders all ten templates and is otherwise built lazily on the
+    first /generate-cv request, costing ~6s on that request. Warming it in a
+    background thread at import means the first visitor doesn't pay for it.
+    """
+    try:
+        with app.app_context():
+            _resume_catalogue()
+    except Exception:  # noqa: BLE001 - warming is best-effort, never fatal
+        pass
+
+
+# Runs under gunicorn (import) and `python app.py` alike; daemon so it never
+# holds up shutdown.
+threading.Thread(target=_warm_caches, daemon=True).start()
+
+
+# Kept at the very end of the module so that every @app.route above - including
+# the admin panel and the /media route - is registered before app.run() blocks.
+# Placed mid-file, running `python app.py` never reached those routes, so
+# url_for('site_media') in the every-page context processor 500'd the whole site
+# whenever Firestore was connected. Under gunicorn (app:app) the module is
+# imported, not executed as __main__, so this block simply does not run there.
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    debug_mode = os.environ.get("FLASK_DEBUG", "true").lower() == "true"
+    # The reloader forks the process. When Firestore is configured its gRPC
+    # channel is already open at import and does not survive that fork - the
+    # child logs "FD from fork parent still in poll list" and lands in a broken
+    # state. Keep the debugger, but only run the reloader when there is no gRPC
+    # channel to break (i.e. Firestore is not connected).
+    use_reloader = debug_mode and db is None
+    app.run(host="0.0.0.0", port=port, debug=debug_mode, use_reloader=use_reloader)

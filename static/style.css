@@ -2651,3 +2651,61 @@ body {
 }
 
 :root[data-bs-theme="dark"] .metric-weight { color: #a78bfa; }
+
+/* --- Plan chooser on the register form ------------------------------------ */
+.plan-choices {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+
+.plan-choice {
+    position: relative;
+    display: block;
+    margin: 0;
+    cursor: pointer;
+}
+
+.plan-choice input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    cursor: pointer;
+}
+
+.plan-choice-body {
+    display: block;
+    border: 1px solid var(--tblr-border-color, #dfe3e8);
+    border-radius: .5rem;
+    padding: .625rem .75rem;
+    transition: border-color .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+
+.plan-choice:hover .plan-choice-body {
+    border-color: var(--tblr-primary, #4263eb);
+}
+
+.plan-choice input:checked + .plan-choice-body {
+    border-color: var(--tblr-primary, #4263eb);
+    box-shadow: 0 0 0 1px var(--tblr-primary, #4263eb) inset;
+    background: color-mix(in srgb, var(--tblr-primary, #4263eb) 6%, transparent);
+}
+
+.plan-choice input:focus-visible + .plan-choice-body {
+    outline: 2px solid var(--tblr-primary, #4263eb);
+    outline-offset: 2px;
+}
+
+.plan-choice-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .5rem;
+}
+
+.plan-choice-name { font-weight: 600; }
+.plan-choice-price { font-weight: 600; }
+.plan-choice-tag { display: block; font-size: .8125rem; margin-top: .125rem; }
+
+/* Highlight the card matching the signed-in user's current plan. */
+.pricing-current { box-shadow: 0 0 0 2px var(--tblr-green, #2fb344) inset; }

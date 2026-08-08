@@ -252,10 +252,21 @@ def urls(db, url_for) -> dict:
     """
     slot -> URL for the templates: the served route when an image has been
     uploaded, the original Unsplash link when it has not.
+
+    This runs in the every-page context processor, so it is deliberately
+    fault-tolerant: a failure to build the media URL for one slot (e.g. the
+    route momentarily unavailable during a dev-server reload) falls back to that
+    slot's shipped default rather than 500ing every page on the site.
     """
     stored = list_stored(db)
-    return {
-        slot: (url_for('site_media', slot=slot, v=int(stored[slot].get('updated_at', 0)))
-               if slot in stored else default)
-        for slot, (_label, default, _mw) in SLOTS.items()
-    }
+    out = {}
+    for slot, (_label, default, _mw) in SLOTS.items():
+        if slot in stored:
+            try:
+                out[slot] = url_for('site_media', slot=slot,
+                                    v=int(stored[slot].get('updated_at', 0)))
+            except Exception:
+                out[slot] = default
+        else:
+            out[slot] = default
+    return out

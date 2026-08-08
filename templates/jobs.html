@@ -38,6 +38,16 @@
 {% endblock %}
 
 {% block content %}
+    {% if jobs_warming %}
+        {# Cold cache: the fetch runs in the background so this page never blocks
+           on it. Reload shortly to pick up the warmed listings. #}
+        <div class="alert alert-info d-flex align-items-center" role="alert" id="jobs-warming">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            <div>Fetching the latest live postings from all boards — this page refreshes automatically in a few seconds.</div>
+        </div>
+        <script>setTimeout(function () { location.reload(); }, 8000);</script>
+    {% endif %}
+
     {% if fetch_errors %}
         <div class="alert alert-warning" role="alert">
             <div class="fw-bold">Some boards didn't respond</div>

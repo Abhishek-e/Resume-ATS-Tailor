@@ -49,6 +49,7 @@ COMPANY_TYPES = [
 _lock = threading.Lock()
 _settings_cache = None
 _announcements_cache = None
+_pricing_cache = None
 
 
 # --- helpers ---------------------------------------------------------------
@@ -72,10 +73,11 @@ def _as_epoch(value) -> float:
 
 def invalidate():
     """Drop the caches - called after any write that a page load reads."""
-    global _settings_cache, _announcements_cache
+    global _settings_cache, _announcements_cache, _pricing_cache
     with _lock:
         _settings_cache = None
         _announcements_cache = None
+        _pricing_cache = None
 
 
 # --- site settings ---------------------------------------------------------
@@ -113,6 +115,124 @@ def save_settings(db, app_name: str, footer_signature: str) -> dict:
     db.collection('site').document('config').set(payload)
     invalidate()
     return payload
+
+
+# --- pricing & promotions --------------------------------------------------
+#
+# Stored in one doc, site/pricing, cached like the settings above. Two parts:
+#   overrides  {slug: {price, price_sub, cycle}}  - blank fields fall back to
+#              the code defaults in plans.py, so the admin only fills in what
+#              they want to change.
+#   promo      a single time-boxed offer {label, description, plan, promo_price,
+#              start, end} - shown as a banner and, for the targeted plan(s), a
+#              struck-through price. start/end are epoch floats; 0 means "no
+#              bound on that side".
+# Nothing here charges money; it only changes what the pricing page shows.
+
+PRICING_FIELDS = ("price", "price_sub", "cycle")
+
+
+def get_pricing(db) -> dict:
+    """Raw stored pricing config ({overrides, promo}), cached. Empty when unset."""
+    global _pricing_cache
+    if _pricing_cache is not None:
+        return _pricing_cache
+
+    stored = {"overrides": {}, "promo": {}}
+    if db is not None:
+        try:
+            doc = db.collection('site').document('pricing').get()
+            if doc.exists:
+                data = doc.to_dict() or {}
+                stored["overrides"] = data.get("overrides") or {}
+                stored["promo"] = data.get("promo") or {}
+        except Exception:
+            # A pricing read must never take the public page down.
+            pass
+
+    with _lock:
+        _pricing_cache = stored
+    return stored
+
+
+def save_pricing(db, overrides: dict, promo: dict) -> dict:
+    """Persist price overrides and the promo. Only known fields are written."""
+    clean_overrides = {}
+    for slug, fields in (overrides or {}).items():
+        row = {k: (fields.get(k) or "").strip() for k in PRICING_FIELDS}
+        # Keep the slug only if at least one field was actually set.
+        if any(row.values()):
+            clean_overrides[slug] = row
+
+    clean_promo = {}
+    if promo and (promo.get("label") or "").strip():
+        clean_promo = {
+            "label": (promo.get("label") or "").strip(),
+            "description": (promo.get("description") or "").strip(),
+            "plan": (promo.get("plan") or "all").strip() or "all",
+            "promo_price": (promo.get("promo_price") or "").strip(),
+            "start": float(promo.get("start") or 0),
+            "end": float(promo.get("end") or 0),
+        }
+
+    payload = {"overrides": clean_overrides, "promo": clean_promo}
+    db.collection('site').document('pricing').set(payload)
+    invalidate()
+    return payload
+
+
+def promo_is_active(promo: dict, now: float = None) -> bool:
+    """True when a promo exists and the current time is within its window."""
+    if not promo or not promo.get("label"):
+        return False
+    now = _now() if now is None else now
+    start = float(promo.get("start") or 0)
+    end = float(promo.get("end") or 0)
+    if start and now < start:
+        return False
+    if end and now > end:
+        return False
+    return True
+
+
+def pricing_view(db, plans_module) -> dict:
+    """Plan cards (defaults + admin overrides) and the live promo, if any.
+
+    Returned shape:
+      {"cards": [ {..plan.., "promo_price": str|None} ], "promo": {...}|None}
+    Consumed by the /pricing page and any CTA that needs the current numbers.
+    """
+    stored = get_pricing(db)
+    overrides = stored.get("overrides") or {}
+    promo = stored.get("promo") or {}
+    active = promo_is_active(promo)
+
+    cards = []
+    for plan in plans_module.list_plans():
+        card = dict(plan)
+        ov = overrides.get(card["slug"]) or {}
+        for field in PRICING_FIELDS:
+            if (ov.get(field) or "").strip():
+                card[field] = ov[field].strip()
+        card["promo_price"] = None
+        if active and promo.get("promo_price"):
+            target = promo.get("plan") or "all"
+            if target in ("all", card["slug"]):
+                card["promo_price"] = promo["promo_price"]
+        cards.append(card)
+
+    live_promo = None
+    if active:
+        live_promo = {
+            "label": promo.get("label", ""),
+            "description": promo.get("description", ""),
+            "plan": promo.get("plan") or "all",
+            "promo_price": promo.get("promo_price", ""),
+            "start": float(promo.get("start") or 0),
+            "end": float(promo.get("end") or 0),
+        }
+
+    return {"cards": cards, "promo": live_promo}
 
 
 # --- admin account ---------------------------------------------------------
