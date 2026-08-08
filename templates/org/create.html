@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% set active_page = "org" %}
+{% block title %}For Teams &amp; Colleges - {{ site.app_name }}{% endblock %}
+
+{% block content %}
+<div class="py-4" style="max-width: 760px; margin: 0 auto;">
+    <div class="text-center mb-4">
+        <h1 class="mb-2">Bring {{ site.app_name }} to your team</h1>
+        <p class="text-secondary fs-3 mb-0">
+            Set up a workspace for a college placement cell or an employer — with
+            seats, an admin, and a shared dashboard.
+        </p>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3 class="card-title">Create an organisation</h3></div>
+        <form method="POST" action="{{ url_for('org_create') }}" class="card-body">
+            <div class="mb-3">
+                <label class="form-label" for="org-name">Organisation name</label>
+                <input type="text" id="org-name" name="name" class="form-control"
+                       placeholder="e.g. Springfield Institute of Technology" required>
+            </div>
+
+            <label class="form-label">Type</label>
+            <div class="row g-2 mb-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-selectgroup-item">
+                        <input type="radio" name="type" value="college" class="form-selectgroup-input" checked>
+                        <span class="form-selectgroup-label d-block text-start p-3">
+                            <span class="fw-bold d-block">🎓 College / placement cell</span>
+                            <span class="text-secondary small">Cohort dashboard: resume readiness, ATS scores, applications across your students.</span>
+                        </span>
+                    </label>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label class="form-selectgroup-item">
+                        <input type="radio" name="type" value="employer" class="form-selectgroup-input">
+                        <span class="form-selectgroup-label d-block text-start p-3">
+                            <span class="fw-bold d-block">🏢 Employer</span>
+                            <span class="text-secondary small">Post openings on a shareable careers page and see who applied.</span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Create organisation</button>
+            <p class="form-hint mt-2">You'll be the admin and can invite members next. No charge — seats are a soft limit.</p>
+        </form>
+    </div>
+</div>
+{% endblock %}

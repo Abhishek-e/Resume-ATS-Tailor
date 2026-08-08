@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set active_page = "org" %}
+{% block title %}Applicants - {{ post.title }}{% endblock %}
+
+{% block content %}
+<div class="py-3" style="max-width: 820px; margin: 0 auto;">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <div>
+            <h1 class="mb-0">Applicants</h1>
+            <div class="text-secondary">{{ post.title }} · {{ org.name }}</div>
+        </div>
+        <a href="{{ url_for('org_jobs') }}" class="ms-auto btn btn-ghost-secondary">Back to jobs</a>
+    </div>
+
+    <div class="card">
+        <div class="list-group list-group-flush">
+            {% for a in applicants %}
+            <div class="list-group-item d-flex align-items-center gap-2">
+                <span class="avatar avatar-sm">{{ (a.applicant_name or a.applicant_email)[:2]|upper }}</span>
+                <div>
+                    <div>{{ a.applicant_name or a.applicant_email }}</div>
+                    <div class="text-secondary small">{{ a.applicant_email }}</div>
+                </div>
+                <a href="mailto:{{ a.applicant_email }}" class="ms-auto btn btn-sm btn-ghost-secondary">Email</a>
+            </div>
+            {% else %}
+            <div class="list-group-item text-secondary text-center">
+                No applicants yet. Share your careers page:
+                <a href="{{ url_for('org_careers', org_id=org.id) }}">/careers/{{ org.id }}</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

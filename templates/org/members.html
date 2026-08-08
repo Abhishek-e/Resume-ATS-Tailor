@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% set active_page = "org" %}
+{% block title %}Members - {{ org.name }}{% endblock %}
+
+{% block content %}
+<div class="py-3" style="max-width: 820px; margin: 0 auto;">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <div>
+            <h1 class="mb-0">Members</h1>
+            <div class="text-secondary">{{ org.name }} · {{ seats.used }}/{{ seats.limit }} seats used</div>
+        </div>
+        <a href="{{ url_for('org_dashboard') }}" class="ms-auto btn btn-ghost-secondary">Back to dashboard</a>
+    </div>
+
+    <div class="card mb-3">
+        <form method="POST" class="card-body">
+            <label class="form-label" for="member-email">Invite a member by email</label>
+            <div class="input-group">
+                <input type="email" id="member-email" name="email" class="form-control"
+                       placeholder="person@example.com" required {{ 'disabled' if seats.left <= 0 }}>
+                <button type="submit" class="btn btn-primary" {{ 'disabled' if seats.left <= 0 }}>Add member</button>
+            </div>
+            <div class="form-hint">
+                {% if seats.left <= 0 %}No seats left.{% else %}{{ seats.left }} seat{{ '' if seats.left == 1 else 's' }} left.{% endif %}
+                The person must already have a {{ site.app_name }} account.
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="list-group list-group-flush">
+            {% for m in members %}
+            <div class="list-group-item d-flex align-items-center gap-2">
+                <span class="avatar avatar-sm">{{ (m.username or m.email)[:2]|upper }}</span>
+                <div>
+                    <div>{{ m.username or m.email }}
+                        {% if m.role == 'org_admin' %}<span class="badge bg-blue-lt ms-1">Admin</span>{% endif %}
+                    </div>
+                    <div class="text-secondary small">{{ m.email }}</div>
+                </div>
+                {% if m.email != org.owner_email %}
+                <form method="POST" class="ms-auto"
+                      onsubmit="return confirm('Remove {{ m.email }} from {{ org.name }}?');">
+                    <input type="hidden" name="action" value="remove">
+                    <input type="hidden" name="email" value="{{ m.email }}">
+                    <button class="btn btn-sm btn-ghost-danger">Remove</button>
+                </form>
+                {% else %}<span class="ms-auto text-secondary small">Owner</span>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

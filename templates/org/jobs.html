@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% set active_page = "org" %}
+{% block title %}Jobs - {{ org.name }}{% endblock %}
+
+{% block content %}
+<div class="py-3">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <div>
+            <h1 class="mb-0">Jobs</h1>
+            <div class="text-secondary">{{ org.name }} · shareable careers page:
+                <a href="{{ url_for('org_careers', org_id=org.id) }}" target="_blank">/careers/{{ org.id }}</a>
+            </div>
+        </div>
+        <a href="{{ url_for('org_dashboard') }}" class="ms-auto btn btn-ghost-secondary">Back to dashboard</a>
+    </div>
+
+    <div class="row row-cards">
+        <div class="col-12 col-lg-5">
+            <div class="card">
+                <div class="card-header"><h3 class="card-title">Post a job</h3></div>
+                <form method="POST" class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label" for="j-title">Title</label>
+                        <input type="text" id="j-title" name="title" class="form-control" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label" for="j-loc">Location</label>
+                        <input type="text" id="j-loc" name="location" class="form-control" placeholder="Remote / City">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label" for="j-type">Employment type</label>
+                        <select id="j-type" name="employment_type" class="form-select">
+                            {% for t in employment_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="j-desc">Description</label>
+                        <textarea id="j-desc" name="description" class="form-control" rows="4"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Post job</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-7">
+            <div class="card">
+                <div class="card-header"><h3 class="card-title">Your postings</h3></div>
+                <div class="list-group list-group-flush">
+                    {% for p in posts %}
+                    <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                        <div>
+                            <div class="fw-bold">{{ p.title }}</div>
+                            <div class="text-secondary small">{{ [p.location, p.employment_type] | select | join(' · ') }}</div>
+                        </div>
+                        <a href="{{ url_for('org_applicants', post_id=p.id) }}" class="ms-auto btn btn-sm btn-ghost-secondary">
+                            {{ applicant_counts.get(p.id, 0) }} applicant{{ '' if applicant_counts.get(p.id,0)==1 else 's' }}
+                        </a>
+                    </div>
+                    {% else %}
+                    <div class="list-group-item text-secondary text-center">No postings yet.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

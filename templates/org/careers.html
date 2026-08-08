@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Careers at {{ org.name }}{% endblock %}
+
+{% block content %}
+<div class="py-4" style="max-width: 820px; margin: 0 auto;">
+    <div class="text-center mb-4">
+        <h1 class="mb-1">Careers at {{ org.name }}</h1>
+        <p class="text-secondary fs-3 mb-0">{{ posts|length }} open position{{ '' if posts|length == 1 else 's' }}</p>
+    </div>
+
+    {% if not signed_in %}
+    <div class="alert alert-info">
+        <a href="{{ url_for('login', next=url_for('org_careers', org_id=org.id)) }}">Log in</a>
+        or <a href="{{ url_for('register') }}">create an account</a> to apply — your name and email are shared with the employer.
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="list-group list-group-flush">
+            {% for p in posts %}
+            <div class="list-group-item">
+                <div class="d-flex flex-wrap align-items-start gap-2">
+                    <div>
+                        <div class="fw-bold fs-3">{{ p.title }}</div>
+                        <div class="text-secondary">{{ [p.location, p.employment_type] | select | join(' · ') }}</div>
+                    </div>
+                    {% if signed_in %}
+                    <form method="POST" action="{{ url_for('org_apply', org_id=org.id, post_id=p.id) }}" class="ms-auto">
+                        <button class="btn btn-primary">Apply</button>
+                    </form>
+                    {% else %}
+                    <a href="{{ url_for('login', next=url_for('org_careers', org_id=org.id)) }}" class="ms-auto btn btn-outline-primary">Log in to apply</a>
+                    {% endif %}
+                </div>
+                {% if p.description %}<p class="text-secondary mt-2 mb-0" style="white-space: pre-line;">{{ p.description }}</p>{% endif %}
+            </div>
+            {% else %}
+            <div class="list-group-item text-secondary text-center">No open positions right now.</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% set active_page = "org" %}
+{% block title %}{{ org.name }} - {{ site.app_name }}{% endblock %}
+
+{% block content %}
+<div class="py-3">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <div>
+            <h1 class="mb-0">{{ org.name }}</h1>
+            <div class="text-secondary">
+                {{ 'College / placement cell' if org.type == 'college' else 'Employer' }}
+                · {{ seats.used }}/{{ seats.limit }} seats
+                {% if org.my_role == 'org_admin' %}· <span class="badge bg-blue-lt">Admin</span>{% endif %}
+            </div>
+        </div>
+        <div class="ms-auto btn-list">
+            {% if org.my_role == 'org_admin' %}
+                <a href="{{ url_for('org_members') }}" class="btn btn-ghost-secondary">Manage members</a>
+                {% if org.type == 'employer' %}
+                    <a href="{{ url_for('org_jobs') }}" class="btn btn-primary">Post &amp; manage jobs</a>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    {% if org.type == 'college' %}
+        <div class="row row-cards mb-3">
+            {% set t = cohort.totals %}
+            {% for label, value in [('Members', t.members), ('Resumes built', t.resumes),
+                                    ('Applications', t.applications), ('Avg ATS score', t.avg_ats),
+                                    ('Placement-ready', t.ready)] %}
+            <div class="col-6 col-md">
+                <div class="card"><div class="card-body text-center">
+                    <div class="h1 mb-0">{{ value }}{% if label == 'Avg ATS score' and value %}%{% endif %}</div>
+                    <div class="text-secondary">{{ label }}</div>
+                </div></div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Cohort</h3></div>
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead><tr>
+                        <th>Member</th><th class="text-center">Resumes</th>
+                        <th class="text-center">Best ATS</th><th class="text-center">Applications</th>
+                        <th class="text-center">Status</th>
+                    </tr></thead>
+                    <tbody>
+                        {% for r in cohort.rows %}
+                        <tr>
+                            <td>{{ r.username or r.email }}<div class="text-secondary small">{{ r.email }}</div></td>
+                            <td class="text-center">{{ r.resume_count }}</td>
+                            <td class="text-center">{{ r.best_ats }}{% if r.best_ats %}%{% endif %}</td>
+                            <td class="text-center">{{ r.applications }}</td>
+                            <td class="text-center">
+                                {% if r.ready %}<span class="badge bg-green-lt">Ready</span>
+                                {% else %}<span class="badge bg-secondary-lt">In progress</span>{% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-secondary text-center">
+                            No members yet. <a href="{{ url_for('org_members') }}">Invite students</a> to see their progress here.
+                        </td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                <h3 class="card-title mb-0">Open positions</h3>
+                <a href="{{ url_for('org_careers', org_id=org.id) }}" target="_blank" class="ms-auto btn btn-sm btn-ghost-secondary">
+                    View public careers page
+                </a>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for p in posts %}
+                <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+                    <div>
+                        <div class="fw-bold">{{ p.title }}</div>
+                        <div class="text-secondary small">{{ [p.location, p.employment_type] | select | join(' · ') }}</div>
+                    </div>
+                    <div class="ms-auto btn-list">
+                        <span class="badge bg-blue-lt">{{ applicant_counts.get(p.id, 0) }} applicant{{ '' if applicant_counts.get(p.id,0)==1 else 's' }}</span>
+                        <a href="{{ url_for('org_applicants', post_id=p.id) }}" class="btn btn-sm btn-ghost-secondary">View applicants</a>
+                    </div>
+                </div>
+                {% else %}
+                <div class="list-group-item text-secondary text-center">
+                    No jobs yet. <a href="{{ url_for('org_jobs') }}">Post your first opening</a>.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

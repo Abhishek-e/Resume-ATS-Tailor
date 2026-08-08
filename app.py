@@ -58,6 +58,7 @@ import prepsets
 import plans
 import mailer
 import jobalert
+import orgs
 
 load_dotenv()
 
@@ -632,6 +633,139 @@ def account_plan():
         return jsonify({"ok": True, "plan": plan, "name": plans.display_name(plan)})
     flash(f'You are now on the {plans.display_name(plan)} plan.', 'success')
     return redirect(url_for('pricing'))
+
+
+# --- B2B: organisations (colleges & employers) -----------------------------
+
+def _current_org():
+    """The signed-in user's organisation (with their role attached), or None."""
+    return orgs.org_for_user(db, session.get('user_id'))
+
+
+def _require_org_admin():
+    """Return the user's org only if they are its admin, else None."""
+    org = _current_org()
+    return org if org and org.get('my_role') == 'org_admin' else None
+
+
+@app.route('/org')
+@login_required
+def org_home():
+    """Entry point: existing members go to their dashboard, everyone else to
+    the create-organisation page."""
+    if db is None:
+        flash('Organisations need the database, which is not configured here.', 'error')
+        return redirect(url_for('home'))
+    if _current_org():
+        return redirect(url_for('org_dashboard'))
+    return render_template('org/create.html', org_types=orgs.ORG_TYPES)
+
+
+@app.route('/org/create', methods=['POST'])
+@login_required
+def org_create():
+    if db is None:
+        return redirect(url_for('home'))
+    if _current_org():
+        return redirect(url_for('org_dashboard'))
+    org_id = orgs.create_org(
+        db, request.form.get('name', ''), request.form.get('type', 'college'),
+        session['user_id'],
+    )
+    flash('Organisation created — you are its admin.', 'success')
+    return redirect(url_for('org_dashboard'))
+
+
+@app.route('/org/dashboard')
+@login_required
+def org_dashboard():
+    org = _current_org()
+    if org is None:
+        return redirect(url_for('org_home'))
+    ctx = {'org': org, 'seats': orgs.seats(db, org['id'])}
+    if org['type'] == 'college':
+        ctx['cohort'] = orgs.cohort_stats(db, org['id'])
+    else:
+        ctx['posts'] = orgs.list_jobs(db, org['id'])
+        ctx['applicant_counts'] = orgs.applicant_counts(db, org['id'])
+    return render_template('org/dashboard.html', **ctx)
+
+
+@app.route('/org/members', methods=['GET', 'POST'])
+@login_required
+def org_members():
+    org = _require_org_admin()
+    if org is None:
+        flash('Only an organisation admin can manage members.', 'error')
+        return redirect(url_for('org_home'))
+    if request.method == 'POST':
+        if request.form.get('action') == 'remove':
+            ok, msg = orgs.remove_member(db, org['id'], request.form.get('email', ''))
+        else:
+            ok, msg = orgs.add_member(db, org['id'], request.form.get('email', ''))
+        flash(msg, 'success' if ok else 'error')
+        return redirect(url_for('org_members'))
+    return render_template('org/members.html', org=org,
+                           members=orgs.list_members(db, org['id']),
+                           seats=orgs.seats(db, org['id']))
+
+
+@app.route('/org/jobs', methods=['GET', 'POST'])
+@login_required
+def org_jobs():
+    org = _require_org_admin()
+    if org is None or org['type'] != 'employer':
+        flash('Job posting is for employer organisations.', 'error')
+        return redirect(url_for('org_home'))
+    if request.method == 'POST':
+        if not (request.form.get('title') or '').strip():
+            flash('A job title is required.', 'error')
+        else:
+            orgs.create_job(db, org['id'], request.form, session['user_id'])
+            flash('Job posted.', 'success')
+        return redirect(url_for('org_jobs'))
+    return render_template('org/jobs.html', org=org,
+                           posts=orgs.list_jobs(db, org['id']),
+                           applicant_counts=orgs.applicant_counts(db, org['id']),
+                           employment_types=adminstore.EMPLOYMENT_TYPES)
+
+
+@app.route('/org/jobs/<post_id>/applicants')
+@login_required
+def org_applicants(post_id):
+    org = _require_org_admin()
+    if org is None or org['type'] != 'employer':
+        return redirect(url_for('org_home'))
+    post = orgs.get_job(db, post_id)
+    if post is None or post.get('org_id') != org['id']:
+        abort(404)
+    return render_template('org/applicants.html', org=org, post=post,
+                           applicants=orgs.list_applicants(db, org['id'], post_id))
+
+
+@app.route('/careers/<org_id>')
+def org_careers(org_id):
+    """Public careers page for an employer org; the shareable apply link."""
+    org = orgs.get_org(db, org_id)
+    if org is None or org['type'] != 'employer':
+        abort(404)
+    return render_template('org/careers.html', org=org,
+                           posts=orgs.list_jobs(db, org_id),
+                           signed_in=bool(session.get('user_id')))
+
+
+@app.route('/careers/<org_id>/<post_id>/apply', methods=['POST'])
+@login_required
+def org_apply(org_id, post_id):
+    org = orgs.get_org(db, org_id)
+    post = orgs.get_job(db, post_id)
+    if org is None or post is None or post.get('org_id') != org_id:
+        abort(404)
+    profile = _user_job_profile(_load_profile_details())
+    orgs.record_applicant(db, org_id, post, session['user_id'],
+                          profile.get('full_name') or session.get('username', ''))
+    flash(f"Applied to {post['title']} at {org['name']}.", 'success')
+    return redirect(url_for('org_careers', org_id=org_id))
 
 
 def _user_job_profile(details):
