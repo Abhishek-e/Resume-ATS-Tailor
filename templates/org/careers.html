@@ -25,7 +25,8 @@
                             {{ p.title }}
                             {% if p.sponsored %}<span class="badge bg-yellow-lt align-middle ms-1">★ Featured</span>{% endif %}
                         </div>
-                        <div class="text-secondary">{{ [p.location, p.employment_type] | select | join(' · ') }}</div>
+                        <div class="text-secondary">{{ [p.location, p.employment_type, p.salary, p.experience] | select | join(' · ') }}</div>
+                        {% if p.deadline %}<div class="text-secondary small">Apply by {{ p.deadline }}{% if p.openings and p.openings > 1 %} · {{ p.openings }} openings{% endif %}</div>{% endif %}
                     </div>
                     {% if signed_in %}
                     <form method="POST" action="{{ url_for('org_apply', org_id=org.id, post_id=p.id) }}" class="ms-auto">

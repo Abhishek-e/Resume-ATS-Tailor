@@ -1,0 +1,68 @@
+{% extends "org/base.html" %}
+{% set active_org = "analytics" %}
+{% block title %}Analytics - {{ org.name }}{% endblock %}
+
+{% block content %}
+<div class="py-3">
+    <h1 class="mb-3">Analytics</h1>
+
+    {% if kind == 'employer' %}
+        <div class="row row-cards mb-3">
+            {% for label, value in [('Jobs', stats.total_jobs), ('Open', stats.open_jobs),
+                                    ('Featured', stats.featured), ('Applicants', stats.total_applicants),
+                                    ('Avg / job', stats.avg_per_job)] %}
+            <div class="col-6 col-md">
+                <div class="card"><div class="card-body text-center">
+                    <div class="h1 mb-0">{{ value }}</div>
+                    <div class="text-secondary">{{ label }}</div>
+                </div></div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Applicants per job</h3></div>
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead><tr><th>Job</th><th class="text-end">Applicants</th></tr></thead>
+                    <tbody>
+                        {% for r in stats.ranking %}
+                        <tr><td>{{ r.title }}</td><td class="text-end">{{ r.count }}</td></tr>
+                        {% else %}
+                        <tr><td colspan="2" class="text-secondary text-center">No jobs yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        {% set t = cohort.totals %}
+        <div class="row row-cards mb-3">
+            {% for label, value in [('Members', t.members), ('Resumes', t.resumes),
+                                    ('Applications', t.applications), ('Avg ATS', t.avg_ats),
+                                    ('Placement-ready', t.ready)] %}
+            <div class="col-6 col-md">
+                <div class="card"><div class="card-body text-center">
+                    <div class="h1 mb-0">{{ value }}{% if label == 'Avg ATS' and value %}%{% endif %}</div>
+                    <div class="text-secondary">{{ label }}</div>
+                </div></div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Cohort</h3></div>
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead><tr><th>Member</th><th class="text-center">Resumes</th><th class="text-center">Best ATS</th><th class="text-center">Applications</th></tr></thead>
+                    <tbody>
+                        {% for r in cohort.rows %}
+                        <tr><td>{{ r.username or r.email }}</td><td class="text-center">{{ r.resume_count }}</td><td class="text-center">{{ r.best_ats }}{% if r.best_ats %}%{% endif %}</td><td class="text-center">{{ r.applications }}</td></tr>
+                        {% else %}
+                        <tr><td colspan="4" class="text-secondary text-center">No members yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -58,6 +58,7 @@ import plans
 import mailer
 import jobalert
 import orgs
+import employerplans
 
 load_dotenv()
 
@@ -416,6 +417,12 @@ def _safe_next(target):
     return target
 
 
+def _post_login_url(email):
+    """Org members land in their console (dashboard); everyone else on home.
+    Keeps employers/colleges away from the job-seeker home after sign-in."""
+    return url_for('org_dashboard') if orgs.org_for_user(db, email) else url_for('home')
+
+
 def _start_session(email, user):
     session['user_id'] = email
     session['username'] = user.get('username') or email.split('@')[0]
@@ -484,7 +491,7 @@ def login():
         elif user and check_password_hash(user['password'], password):
             _start_session(email, user)
             flash('Login successful!', 'success')
-            return redirect(_safe_next(request.form.get('next')) or url_for('home'))
+            return redirect(_safe_next(request.form.get('next')) or _post_login_url(email))
         else:
             flash('Invalid email or password.', 'error')
 
@@ -548,7 +555,7 @@ def auth_google():
 
     _start_session(email, user)
     target = _safe_next(body.get('next'))
-    return jsonify({"redirect": target or url_for('home')})
+    return jsonify({"redirect": target or _post_login_url(email)})
 
 
 @app.route('/logout')
@@ -653,6 +660,19 @@ def org_dashboard():
     return render_template('org/dashboard.html', **ctx)
 
 
+@app.route('/org/analytics')
+@login_required
+def org_analytics():
+    org = _current_org()
+    if org is None:
+        return redirect(url_for('org_home'))
+    if org['type'] == 'employer':
+        return render_template('org/analytics.html', org=org, kind='employer',
+                               stats=orgs.employer_analytics(db, org['id']))
+    return render_template('org/analytics.html', org=org, kind='college',
+                           cohort=orgs.cohort_stats(db, org['id']))
+
+
 @app.route('/org/members', methods=['GET', 'POST'])
 @login_required
 def org_members():
@@ -697,6 +717,28 @@ def org_billing():
                            orders=orgs.list_orders(db, org['id']))
 
 
+@app.route('/employer/pricing', methods=['GET', 'POST'])
+def employer_pricing():
+    """Public employer pricing. A signed-in employer admin can pick a paid tier,
+    which records an order (reconciled/paid via the billing flow)."""
+    org = _current_org()
+    is_admin = bool(org and org.get('my_role') == 'org_admin' and org['type'] == 'employer')
+    if request.method == 'POST':
+        if not is_admin:
+            flash('Sign in as an employer admin to choose a plan.', 'error')
+            return redirect(url_for('employer_pricing'))
+        product = request.form.get('product')
+        if product and orgs.create_order(db, org['id'], product):
+            flash("Plan selected. Complete payment on the billing page.", 'success')
+            return redirect(url_for('org_billing'))
+        flash('Unknown plan.', 'error')
+        return redirect(url_for('employer_pricing'))
+    return render_template('employer_pricing.html',
+                           plans=employerplans.list_plans(),
+                           org=org, is_admin=is_admin,
+                           is_premium=orgs.is_premium(org))
+
+
 @app.route('/org/jobs', methods=['GET', 'POST'])
 @login_required
 def org_jobs():
@@ -705,16 +747,25 @@ def org_jobs():
         flash('Job posting is for employer organisations.', 'error')
         return redirect(url_for('org_home'))
     if request.method == 'POST':
+        if not orgs.can_post_job(db, org):
+            flash(f'Your free plan allows {orgs.FREE_JOB_LIMIT} job posts. '
+                  f'Upgrade to post more.', 'error')
+            return redirect(url_for('employer_pricing'))
         if not (request.form.get('title') or '').strip():
             flash('A job title is required.', 'error')
         else:
             orgs.create_job(db, org['id'], request.form, session['user_id'])
             flash('Job posted.', 'success')
         return redirect(url_for('org_jobs'))
+    posts = orgs.list_jobs(db, org['id'])
     return render_template('org/jobs.html', org=org,
-                           posts=orgs.list_jobs(db, org['id']),
+                           posts=posts,
                            applicant_counts=orgs.applicant_counts(db, org['id']),
-                           employment_types=adminstore.EMPLOYMENT_TYPES)
+                           employment_types=adminstore.EMPLOYMENT_TYPES,
+                           is_premium=orgs.is_premium(org),
+                           free_limit=orgs.FREE_JOB_LIMIT,
+                           posts_left=max(orgs.FREE_JOB_LIMIT - len(posts), 0),
+                           today=datetime.now(timezone.utc).strftime('%Y-%m-%d'))
 
 
 @app.route('/org/jobs/<post_id>/applicants')

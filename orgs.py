@@ -191,6 +191,16 @@ def cohort_stats(db, org_id) -> dict:
 
 # --- employer: job posts & applicants --------------------------------------
 
+FREE_JOB_LIMIT = 5
+
+
+def _to_int(value, default=0):
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
 def create_job(db, org_id, data, author) -> str:
     ref = db.collection("org_job_posts").document()
     ref.set({
@@ -198,11 +208,33 @@ def create_job(db, org_id, data, author) -> str:
         "title": data.get("title", "").strip(),
         "location": data.get("location", "").strip(),
         "employment_type": data.get("employment_type", "Full-time"),
+        "salary": data.get("salary", "").strip(),
+        "experience": data.get("experience", "").strip(),
+        "openings": _to_int(data.get("openings"), 1),
+        # Application closing date as an ISO 'YYYY-MM-DD' string (or '' for none).
+        "deadline": (data.get("deadline") or "").strip(),
         "description": data.get("description", "").strip(),
         "posted_by": author,
         "created_at": _now(),
+        "sponsored": False,
+        "sponsored_at": 0,
     })
     return ref.id
+
+
+def is_premium(org) -> bool:
+    return bool(org and org.get("premium"))
+
+
+def can_post_job(db, org) -> bool:
+    """Employers post up to FREE_JOB_LIMIT jobs free; premium lifts the cap."""
+    if is_premium(org):
+        return True
+    return len(list_jobs(db, org["id"])) < FREE_JOB_LIMIT
+
+
+def set_premium(db, org_id, on=True) -> None:
+    db.collection("organizations").document(org_id).update({"premium": bool(on)})
 
 
 def list_jobs(db, org_id) -> list:
@@ -301,6 +333,29 @@ def applicant_counts(db, org_id) -> dict:
     return counts
 
 
+def employer_analytics(db, org_id) -> dict:
+    """Headline recruiting metrics for the employer analytics page."""
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    jobs = list_jobs(db, org_id)
+    counts = applicant_counts(db, org_id)
+    total_applicants = sum(counts.values())
+    ranking = sorted(
+        ({"title": j["title"], "count": counts.get(j["id"], 0)} for j in jobs),
+        key=lambda r: -r["count"],
+    )
+    open_jobs = sum(1 for j in jobs if not (j.get("deadline") and j["deadline"] < today))
+    return {
+        "total_jobs": len(jobs),
+        "open_jobs": open_jobs,
+        "closed_jobs": len(jobs) - open_jobs,
+        "featured": sum(1 for j in jobs if j.get("sponsored")),
+        "total_applicants": total_applicants,
+        "avg_per_job": round(total_applicants / len(jobs), 1) if jobs else 0,
+        "ranking": ranking[:10],
+    }
+
+
 # --- employer: candidate database search -----------------------------------
 
 def search_candidates(db, query="", location="", limit=50) -> list:
@@ -371,6 +426,11 @@ def candidate_pool_size(db) -> int:
 # order paid, which applies its effect (currently: extra member seats).
 
 PRODUCTS = {
+    # Employer subscription tiers - both grant premium (unlimited jobs +
+    # candidate database). Display details live in employerplans.py.
+    "emp_growth": {"label": "Employer Growth (monthly)", "amount": 2699, "premium": True},
+    "emp_pro": {"label": "Employer Pro (monthly)", "amount": 7199, "premium": True},
+    # Seat packs (colleges or employers).
     "seats_25": {"label": "+25 member seats", "amount": 4999, "seats_delta": 25},
     "seats_100": {"label": "+100 member seats", "amount": 14999, "seats_delta": 100},
 }
@@ -436,10 +496,12 @@ def mark_order_paid(db, order_id) -> bool:
     db.collection("orders").document(order_id).update({"status": "paid", "paid_at": _now()})
 
     product = PRODUCTS.get(order.get("product"))
-    if product and product.get("seats_delta"):
-        org = get_org(db, order.get("org_id"))
-        if org:
+    org = get_org(db, order.get("org_id"))
+    if product and org:
+        if product.get("seats_delta"):
             db.collection("organizations").document(org["id"]).update({
                 "seat_limit": int(org.get("seat_limit", 0)) + product["seats_delta"],
             })
+        if product.get("premium"):
+            set_premium(db, org["id"], True)
     return True

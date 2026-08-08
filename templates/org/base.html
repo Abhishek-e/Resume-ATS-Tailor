@@ -1,0 +1,105 @@
+{#
+  Organisation console shell — a responsive, collapsible sidebar instead of the
+  consumer top navbar. Used by the signed-in org pages (dashboard, jobs,
+  candidates, members, billing, analytics) so employers/colleges get a focused
+  console with none of the job-seeker chrome (CV builder, apply, profile).
+  Public org pages (careers) and the create-org page keep the consumer layout.
+#}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Console{% endblock %} · {{ site.app_name }}</title>
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('resumify-theme');
+                if (saved === 'dark' || saved === 'light') {
+                    document.documentElement.setAttribute('data-bs-theme', saved);
+                }
+            } catch (e) { /* private mode */ }
+        })();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/tabler/css/tabler.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="page">
+    <aside class="navbar navbar-vertical navbar-expand-lg admin-sidebar">
+        <div class="container-fluid">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#org-menu" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="navbar-brand admin-brand">
+                <a href="{{ url_for('org_dashboard') }}">{{ org.name }}</a>
+                <span class="admin-brand-tag">{{ 'Employer' if org.type == 'employer' else 'College' }}</span>
+            </div>
+
+            <div class="collapse navbar-collapse" id="org-menu">
+                <ul class="navbar-nav pt-lg-3">
+                    {% set items = [('dashboard', 'org_dashboard', 'Dashboard')] %}
+                    {% if org.type == 'employer' %}
+                        {% set items = items + [
+                            ('jobs', 'org_jobs', 'Jobs'),
+                            ('candidates', 'org_candidates', 'Candidates'),
+                        ] %}
+                    {% endif %}
+                    {% set items = items + [
+                        ('analytics', 'org_analytics', 'Analytics'),
+                        ('members', 'org_members', 'Members'),
+                        ('billing', 'org_billing', 'Billing'),
+                    ] %}
+                    {% for key, endpoint, label in items %}
+                    <li class="nav-item {% if active_org == key %}active{% endif %}">
+                        <a class="nav-link" href="{{ url_for(endpoint) }}">
+                            <span class="nav-link-title">{{ label }}</span>
+                        </a>
+                    </li>
+                    {% endfor %}
+                    {% if org.type == 'employer' %}
+                    <li class="nav-item {% if active_org == 'pricing' %}active{% endif %}">
+                        <a class="nav-link" href="{{ url_for('employer_pricing') }}">
+                            <span class="nav-link-title">Upgrade</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+
+                <div class="mt-auto pt-3 admin-sidebar-foot">
+                    <div class="text-secondary small text-truncate mb-2">{{ session.username }}</div>
+                    <div class="btn-list">
+                        <a href="{{ url_for('home') }}" class="btn btn-sm btn-ghost-secondary">View site</a>
+                        <a href="{{ url_for('logout') }}" class="btn btn-sm btn-ghost-danger">Log out</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <div class="page-wrapper">
+        <div class="page-body">
+            <div class="container-xl">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible" role="alert">
+                                <div>{{ message }}</div>
+                                <a class="btn-close" data-bs-dismiss="alert" aria-label="close"></a>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/tabler/js/tabler.min.js') }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
