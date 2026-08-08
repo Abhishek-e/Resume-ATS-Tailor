@@ -27,6 +27,26 @@
         </form>
     </div>
 
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col">
+                    <label class="form-label">Bulk import from CSV</label>
+                    <form method="POST" action="{{ url_for('org_members_import') }}" enctype="multipart/form-data" class="d-flex gap-2">
+                        <input type="file" name="csv" accept=".csv,text/csv" class="form-control" required>
+                        <button class="btn btn-primary">Import</button>
+                    </form>
+                    <div class="form-hint">Any column with an email is used. Members must already have an account. Seat limit applies.</div>
+                </div>
+                {% if org.type == 'college' %}
+                <div class="col-auto">
+                    <a href="{{ url_for('org_report_csv') }}" class="btn btn-outline-primary">Export placement report (CSV)</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <div class="card">
         <div class="list-group list-group-flush">
             {% for m in members %}

@@ -28,6 +28,29 @@
         </div>
     </form>
 
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        {% if q or location %}
+        <form method="POST" class="d-flex gap-1">
+            <input type="hidden" name="action" value="save">
+            <input type="hidden" name="q" value="{{ q }}">
+            <input type="hidden" name="location" value="{{ location }}">
+            <input type="text" name="name" class="form-control form-control-sm" style="width:180px"
+                   placeholder="Name this search">
+            <button class="btn btn-sm btn-outline-primary">Save search</button>
+        </form>
+        {% endif %}
+        {% for s in saved_searches %}
+        <span class="badge bg-blue-lt d-inline-flex align-items-center gap-1">
+            <a href="{{ url_for('org_candidates', q=s.query, location=s.location) }}" class="text-reset text-decoration-none">{{ s.name }}</a>
+            <form method="POST" class="d-inline">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="search_id" value="{{ s.id }}">
+                <button class="btn-close btn-sm" style="font-size:.6rem" aria-label="Remove"></button>
+            </form>
+        </span>
+        {% endfor %}
+    </div>
+
     <div class="row row-cards">
         {% for c in results %}
         <div class="col-12 col-md-6 col-xl-4">
@@ -48,6 +71,7 @@
                     {% endif %}
                     <div class="btn-list">
                         <a href="mailto:{{ c.email }}" class="btn btn-sm btn-primary">Contact</a>
+                        {% if c.has_resume %}<a href="{{ url_for('org_candidate_resume', email=c.email) }}" class="btn btn-sm btn-ghost-secondary">Resume ↓</a>{% endif %}
                         {% if c.linkedin %}<a href="{{ c.linkedin }}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-secondary">LinkedIn</a>{% endif %}
                         {% if c.github %}<a href="{{ c.github }}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-secondary">GitHub</a>{% endif %}
                     </div>

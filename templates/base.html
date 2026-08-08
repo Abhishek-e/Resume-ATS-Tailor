@@ -130,8 +130,14 @@
                             <li class="nav-item {% if active_page == 'pricing' %}active{% endif %}">
                                 <a class="nav-link" href="{{ url_for('pricing') }}">Pricing</a>
                             </li>
-                            <li class="nav-item {% if active_page == 'org' %}active{% endif %}">
-                                <a class="nav-link" href="{{ url_for('org_home') }}">For Teams</a>
+                            <li class="nav-item dropdown {% if active_page == 'org' %}active{% endif %}">
+                                <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" role="button">Solutions</a>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{{ url_for('landing', audience='colleges') }}">For Colleges &amp; Institutions</a>
+                                    <a class="dropdown-item" href="{{ url_for('landing', audience='employers') }}">For Employers</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('org_home') }}">Create an organisation</a>
+                                </div>
                             </li>
                         </ul>
                     </div>

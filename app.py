@@ -59,6 +59,7 @@ import mailer
 import jobalert
 import orgs
 import employerplans
+import payments
 
 load_dotenv()
 
@@ -692,6 +693,63 @@ def org_members():
                            seats=orgs.seats(db, org['id']))
 
 
+@app.route('/org/members/import', methods=['POST'])
+@login_required
+def org_members_import():
+    """Bulk-add members from a CSV (any cell that looks like an email is used)."""
+    org = _require_org_admin()
+    if org is None:
+        return redirect(url_for('org_home'))
+    upload = request.files.get('csv')
+    if not upload or not upload.filename:
+        flash('Choose a CSV file to import.', 'error')
+        return redirect(url_for('org_members'))
+
+    import csv
+    text = upload.read().decode('utf-8', errors='ignore')
+    emails = []
+    for row in csv.reader(io.StringIO(text)):
+        for cell in row:
+            cell = (cell or '').strip().lower()
+            if '@' in cell and '.' in cell.split('@')[-1]:
+                emails.append(cell)
+                break
+    emails = list(dict.fromkeys(emails))  # de-dupe, preserve order
+
+    if not emails:
+        flash('No email addresses found in that file.', 'error')
+        return redirect(url_for('org_members'))
+
+    summary = orgs.bulk_add_members(db, org['id'], emails)
+    msg = f"Added {summary['added']} member(s)."
+    if summary['skipped']:
+        preview = '; '.join(f"{e} ({r})" for e, r in summary['skipped'][:5])
+        more = '' if len(summary['skipped']) <= 5 else f" and {len(summary['skipped']) - 5} more"
+        msg += f" Skipped {len(summary['skipped'])}: {preview}{more}"
+    flash(msg, 'success' if summary['added'] else 'error')
+    return redirect(url_for('org_members'))
+
+
+@app.route('/org/report.csv')
+@login_required
+def org_report_csv():
+    """Placement/cohort report for a college org, as a CSV download."""
+    org = _require_org_admin()
+    if org is None or org['type'] != 'college':
+        abort(404)
+    import csv
+    cohort = orgs.cohort_stats(db, org['id'])
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(['Email', 'Name', 'Resumes', 'Best ATS', 'Applications', 'Placement-ready'])
+    for r in cohort['rows']:
+        writer.writerow([r['email'], r['username'], r['resume_count'],
+                         r['best_ats'], r['applications'], 'Yes' if r['ready'] else 'No'])
+    return send_file(
+        io.BytesIO(buf.getvalue().encode('utf-8')), mimetype='text/csv',
+        as_attachment=True, download_name=f"{_slugify(org['name'])}-placement-report.csv")
+
+
 @app.route('/org/billing', methods=['GET', 'POST'])
 @login_required
 def org_billing():
@@ -717,6 +775,37 @@ def org_billing():
                            orders=orgs.list_orders(db, org['id']))
 
 
+@app.route('/org/pay/<order_id>', methods=['GET', 'POST'])
+@login_required
+def org_pay(order_id):
+    """UPI / Google Pay checkout for one order. In test mode a button simulates
+    a successful payment; in live mode the buyer confirms they've paid and an
+    admin verifies it (a UPI-ID flow has no automatic settlement)."""
+    org = _require_org_admin()
+    order = orgs.get_order(db, order_id)
+    if org is None or order is None or order.get('org_id') != org['id']:
+        abort(404)
+
+    pay = adminstore.get_payment_settings(db)
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'simulate' and pay['mode'] == 'test':
+            orgs.mark_order_paid(db, order_id)
+            flash('Test payment successful — order activated.', 'success')
+        elif action == 'submitted':
+            orgs.mark_order_submitted(db, order_id)
+            flash("Thanks! We'll confirm your payment and activate it shortly.", 'success')
+        return redirect(url_for('org_billing'))
+
+    upi_uri = qr = None
+    if pay['upi_id'] and order['status'] != 'paid':
+        note = f"{order['label']} #{order_id[:6]}"
+        upi_uri = payments.upi_uri(pay['upi_id'], pay['payee_name'], order['amount'], note)
+        qr = payments.qr_svg(upi_uri)
+    return render_template('org/pay.html', org=org, order=order, pay=pay,
+                           upi_uri=upi_uri, qr=qr)
+
+
 @app.route('/employer/pricing', methods=['GET', 'POST'])
 def employer_pricing():
     """Public employer pricing. A signed-in employer admin can pick a paid tier,
@@ -737,6 +826,37 @@ def employer_pricing():
                            plans=employerplans.list_plans(),
                            org=org, is_admin=is_admin,
                            is_premium=orgs.is_premium(org))
+
+
+def _landing_pairs(text):
+    """Split a 'A | B' per-line block into (a, b) tuples for the templates."""
+    out = []
+    for line in (text or '').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if '|' in line:
+            a, b = line.split('|', 1)
+            out.append((a.strip(), b.strip()))
+        else:
+            out.append((line, ''))
+    return out
+
+
+@app.route('/for/<audience>')
+def landing(audience):
+    """Editable B2B landing page for colleges or employers."""
+    if audience not in ('colleges', 'employers'):
+        abort(404)
+    aud = 'college' if audience == 'colleges' else 'employer'
+    content = adminstore.get_landing(db, aud)
+    return render_template(
+        'landing.html', audience=aud, c=content,
+        services=[{'title': t, 'body': b} for t, b in _landing_pairs(content['services'])],
+        features=[t for t, _ in _landing_pairs(content['features'])],
+        faq=[{'q': t, 'a': b} for t, b in _landing_pairs(content['faq'])],
+        pricing_url=url_for('employer_pricing') if aud == 'employer' else url_for('org_home'),
+    )
 
 
 @app.route('/org/jobs', methods=['GET', 'POST'])
@@ -795,25 +915,82 @@ def org_job_sponsor(post_id):
     return redirect(url_for('org_jobs'))
 
 
-@app.route('/org/candidates')
+@app.route('/org/candidates', methods=['GET', 'POST'])
 @login_required
 def org_candidates():
     """Recruiter search over opt-in candidate profiles (employer admins only).
 
     Only profiles whose owner ticked 'discoverable to recruiters' are ever
-    returned; an empty query lists everyone who opted in.
+    returned; an empty query lists everyone who opted in. Recruiters can save a
+    search for reuse.
     """
     org = _require_org_admin()
     if org is None or org['type'] != 'employer':
         flash('Candidate search is for employer organisations.', 'error')
         return redirect(url_for('org_home'))
+    if request.method == 'POST':
+        if request.form.get('action') == 'save':
+            orgs.save_search(db, org['id'], session['user_id'], request.form.get('name', ''),
+                             request.form.get('q', ''), request.form.get('location', ''))
+            flash('Search saved.', 'success')
+        elif request.form.get('action') == 'delete':
+            orgs.delete_search(db, org['id'], request.form.get('search_id', ''))
+            flash('Saved search removed.', 'success')
+        return redirect(url_for('org_candidates', q=request.form.get('q', ''),
+                                location=request.form.get('location', '')))
     q = request.args.get('q', '').strip()
     loc = request.args.get('location', '').strip()
     return render_template(
         'org/candidates.html', org=org, q=q, location=loc,
         results=orgs.search_candidates(db, q, loc),
         pool=orgs.candidate_pool_size(db),
+        saved_searches=orgs.list_searches(db, org['id']),
     )
+
+
+def _fetch_docs_for_user(collection, email):
+    """Docs in a collection owned by an arbitrary user (newest first)."""
+    if db is None:
+        return []
+    docs = db.collection(collection).where(filter=FieldFilter('user_id', '==', email)).stream()
+    items = []
+    for d in docs:
+        data = d.to_dict()
+        data['id'] = d.id
+        items.append(data)
+    items.sort(key=lambda r: r.get('created_at') or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    return items
+
+
+def _candidate_resume_pdf(email):
+    """Latest saved resume for a user, rendered to PDF. (bytes, filename) or (None, '')."""
+    rows = _fetch_docs_for_user('resumes', email)
+    if not rows:
+        return None, ''
+    row = rows[0]
+    try:
+        html = _render_resume_html(row.get('template', 'modern'), row.get('generated_content') or {})
+        return _html_to_pdf_bytes(html), f"{_slugify(row.get('full_name') or 'resume')}.pdf"
+    except Exception:  # noqa: BLE001
+        return None, ''
+
+
+@app.route('/org/candidates/<email>/resume.pdf')
+@login_required
+def org_candidate_resume(email):
+    """A candidate's latest resume as PDF, for recruiters. Gated on the same
+    opt-in that surfaces them in search."""
+    org = _require_org_admin()
+    if org is None or org['type'] != 'employer':
+        abort(404)
+    email = (email or '').strip().lower()
+    if not orgs.is_visible_candidate(db, email):
+        abort(404)
+    pdf_bytes, filename = _candidate_resume_pdf(email)
+    if not pdf_bytes:
+        abort(404)
+    return send_file(io.BytesIO(pdf_bytes), mimetype='application/pdf',
+                     as_attachment=True, download_name=filename)
 
 
 @app.route('/careers/<org_id>')
@@ -2498,6 +2675,33 @@ def admin_orders():
             flash('Order not found.', 'error')
         return redirect(url_for('admin_orders'))
     return render_template('admin/orders.html', orders=orgs.list_all_orders(db))
+
+
+@app.route('/admin/payments', methods=['GET', 'POST'])
+@admin_required
+def admin_payments():
+    """Configure UPI collection: the UPI ID payments go to, the payee name shown
+    in the app, and the test/live mode."""
+    if request.method == 'POST':
+        adminstore.save_payment_settings(
+            db, request.form.get('upi_id', ''),
+            request.form.get('payee_name', ''), request.form.get('mode', 'test'))
+        flash('Payment settings saved.', 'success')
+        return redirect(url_for('admin_payments'))
+    return render_template('admin/payments.html', pay=adminstore.get_payment_settings(db))
+
+
+@app.route('/admin/landing', methods=['GET', 'POST'])
+@admin_required
+def admin_landing():
+    """Edit the Colleges and Employers landing pages."""
+    if request.method == 'POST':
+        adminstore.save_landing(db, request.form.get('audience'), request.form)
+        flash('Landing page saved.', 'success')
+        return redirect(url_for('admin_landing'))
+    return render_template('admin/landing.html',
+                           college=adminstore.get_landing(db, 'college'),
+                           employer=adminstore.get_landing(db, 'employer'))
 
 
 @app.route('/admin/job-alert', methods=['GET', 'POST'])

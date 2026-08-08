@@ -1,0 +1,66 @@
+{% extends "admin/base.html" %}
+{% set active_admin = "admin_landing" %}
+{% block title %}Landing pages{% endblock %}
+{% block page_title %}Landing pages{% endblock %}
+{% block page_sub %}Edit the Colleges and Employers landing pages. For Services and FAQ, put one item per line as "Title | Body". Features are one per line.{% endblock %}
+
+{% macro editor(audience, data, label) %}
+<div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-2">
+        <h3 class="card-title mb-0">{{ label }}</h3>
+        <a href="{{ url_for('landing', audience=('employers' if audience=='employer' else 'colleges')) }}"
+           target="_blank" class="ms-auto btn btn-sm btn-ghost-secondary">View page</a>
+    </div>
+    <form method="POST" class="card-body">
+        <input type="hidden" name="audience" value="{{ audience }}">
+        <div class="row">
+            <div class="col-12 mb-2">
+                <label class="form-label">Hero title</label>
+                <input type="text" name="hero_title" class="form-control" value="{{ data.hero_title }}">
+            </div>
+            <div class="col-12 mb-2">
+                <label class="form-label">Hero subtitle</label>
+                <input type="text" name="hero_subtitle" class="form-control" value="{{ data.hero_subtitle }}">
+            </div>
+            <div class="col-12 col-md-6 mb-2">
+                <label class="form-label">Services <span class="form-label-description">Title | Description per line</span></label>
+                <textarea name="services" rows="4" class="form-control">{{ data.services }}</textarea>
+            </div>
+            <div class="col-12 col-md-6 mb-2">
+                <label class="form-label">Features <span class="form-label-description">one per line</span></label>
+                <textarea name="features" rows="4" class="form-control">{{ data.features }}</textarea>
+            </div>
+            <div class="col-12 mb-2">
+                <label class="form-label">FAQ <span class="form-label-description">Question | Answer per line</span></label>
+                <textarea name="faq" rows="3" class="form-control">{{ data.faq }}</textarea>
+            </div>
+            <div class="col-12 mb-2">
+                <label class="form-label">Support</label>
+                <input type="text" name="support" class="form-control" value="{{ data.support }}">
+            </div>
+            <div class="col-12 mb-2">
+                <label class="form-label">Pricing note</label>
+                <input type="text" name="pricing_note" class="form-control" value="{{ data.pricing_note }}">
+            </div>
+            <div class="col-12 col-md-4 mb-2">
+                <label class="form-label">Contact email</label>
+                <input type="email" name="contact_email" class="form-control" value="{{ data.contact_email }}">
+            </div>
+            <div class="col-12 col-md-4 mb-2">
+                <label class="form-label">Contact phone</label>
+                <input type="text" name="contact_phone" class="form-control" value="{{ data.contact_phone }}">
+            </div>
+            <div class="col-12 col-md-4 mb-2">
+                <label class="form-label">Contact note</label>
+                <input type="text" name="contact_note" class="form-control" value="{{ data.contact_note }}">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Save {{ label }}</button>
+    </form>
+</div>
+{% endmacro %}
+
+{% block content %}
+{{ editor('college', college, 'Colleges page') }}
+{{ editor('employer', employer, 'Employers page') }}
+{% endblock %}

@@ -38,7 +38,7 @@
         <div class="card-header"><h3 class="card-title">Order history</h3></div>
         <div class="table-responsive">
             <table class="table table-vcenter card-table">
-                <thead><tr><th>Item</th><th>Amount</th><th>Status</th><th>Placed</th></tr></thead>
+                <thead><tr><th>Item</th><th>Amount</th><th>Status</th><th>Placed</th><th></th></tr></thead>
                 <tbody>
                     {% for o in orders %}
                     <tr>
@@ -46,12 +46,18 @@
                         <td>{{ o.currency }}{{ '{:,}'.format(o.amount) }}</td>
                         <td>
                             {% if o.status == 'paid' %}<span class="badge bg-green-lt">Paid</span>
+                            {% elif o.status == 'submitted' %}<span class="badge bg-blue-lt">Awaiting confirmation</span>
                             {% else %}<span class="badge bg-yellow-lt">Pending</span>{% endif %}
                         </td>
                         <td class="text-secondary">{{ o.created_at | admin_date }}</td>
+                        <td class="text-end">
+                            {% if o.status != 'paid' %}
+                            <a href="{{ url_for('org_pay', order_id=o.id) }}" class="btn btn-sm btn-primary">Pay</a>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="4" class="text-secondary text-center">No orders yet.</td></tr>
+                    <tr><td colspan="5" class="text-secondary text-center">No orders yet.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

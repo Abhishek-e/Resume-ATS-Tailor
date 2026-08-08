@@ -50,6 +50,8 @@ _lock = threading.Lock()
 _settings_cache = None
 _announcements_cache = None
 _pricing_cache = None
+_payment_cache = None
+_landing_cache = {}
 
 
 # --- helpers ---------------------------------------------------------------
@@ -73,11 +75,13 @@ def _as_epoch(value) -> float:
 
 def invalidate():
     """Drop the caches - called after any write that a page load reads."""
-    global _settings_cache, _announcements_cache, _pricing_cache
+    global _settings_cache, _announcements_cache, _pricing_cache, _payment_cache, _landing_cache
     with _lock:
         _settings_cache = None
         _announcements_cache = None
         _pricing_cache = None
+        _payment_cache = None
+        _landing_cache = {}
 
 
 # --- site settings ---------------------------------------------------------
@@ -233,6 +237,132 @@ def pricing_view(db, plans_module) -> dict:
         }
 
     return {"cards": cards, "promo": live_promo}
+
+
+# --- payment settings (UPI) ------------------------------------------------
+
+def get_payment_settings(db) -> dict:
+    """UPI collection config: {upi_id, payee_name, mode}. Cached like settings.
+    mode is 'test' or 'live'; in test mode the pay page can simulate success."""
+    global _payment_cache
+    if _payment_cache is not None:
+        return _payment_cache
+
+    cfg = {"upi_id": "", "payee_name": DEFAULT_APP_NAME, "mode": "test"}
+    if db is not None:
+        try:
+            doc = db.collection("site").document("payment").get()
+            if doc.exists:
+                stored = doc.to_dict() or {}
+                cfg["upi_id"] = (stored.get("upi_id") or "").strip()
+                cfg["payee_name"] = (stored.get("payee_name") or "").strip() or DEFAULT_APP_NAME
+                cfg["mode"] = "live" if stored.get("mode") == "live" else "test"
+        except Exception:
+            pass
+
+    with _lock:
+        _payment_cache = cfg
+    return cfg
+
+
+def save_payment_settings(db, upi_id, payee_name, mode) -> dict:
+    payload = {
+        "upi_id": (upi_id or "").strip(),
+        "payee_name": (payee_name or "").strip() or DEFAULT_APP_NAME,
+        "mode": "live" if mode == "live" else "test",
+    }
+    db.collection("site").document("payment").set(payload)
+    invalidate()
+    return payload
+
+
+def payments_configured(db) -> bool:
+    return bool(get_payment_settings(db).get("upi_id"))
+
+
+# --- B2B landing pages (Colleges / Employers) ------------------------------
+#
+# Two audience landing pages, each a single page with sections. Editable fields
+# are stored as text (services / features / faq use one item per line, with
+# "A | B" splitting title|body or question|answer) so the admin form stays
+# simple. Defaults below make the pages presentable before any editing.
+
+LANDING_FIELDS = (
+    "hero_title", "hero_subtitle", "services", "features",
+    "support", "faq", "pricing_note", "contact_email", "contact_phone", "contact_note",
+)
+
+LANDING_DEFAULTS = {
+    "college": {
+        "hero_title": "Placement success, powered by AI",
+        "hero_subtitle": "ATS-ready resumes, interview prep and a placement-cell "
+                         "dashboard that shows which students are ready.",
+        "services": "Resume & ATS tools | Every student builds an ATS-optimised resume and sees their score.\n"
+                    "Interview preparation | 270+ questions and company practice sets.\n"
+                    "Placement dashboard | Track cohort readiness, resumes and applications.",
+        "features": "Cohort analytics\nBulk student onboarding (CSV)\nPlacement report export\n"
+                    "Seats & admin roles\nEmployer connections",
+        "support": "Email support and onboarding help for your placement cell.",
+        "faq": "Do students need accounts? | Yes — they register free, then you add them to your cohort.\n"
+               "Can we export placement data? | Yes, download a CSV placement report anytime.\n"
+               "Is there a limit on students? | Seats are configurable — contact us for large cohorts.",
+        "pricing_note": "Free to start. Talk to us about institution plans for large cohorts.",
+        "contact_email": "", "contact_phone": "",
+        "contact_note": "Talk to us about onboarding your institution.",
+    },
+    "employer": {
+        "hero_title": "Hire faster, for less",
+        "hero_subtitle": "Post jobs, get a branded careers page and search opt-in "
+                         "candidates — at prices about 10% below the market.",
+        "services": "Job postings | Post roles with salary, experience and deadlines.\n"
+                    "Candidate search | Search opt-in candidate profiles by skills and location.\n"
+                    "Featured listings | Boost roles to the top of the public jobs board.",
+        "features": "5 free job posts\nApplicant tracking\nCandidate database\n"
+                    "Featured / sponsored jobs\nRecruiter seats\nHiring analytics",
+        "support": "Priority support on paid plans.",
+        "faq": "How many free posts? | Five, then upgrade to a premium plan.\n"
+               "How do candidates appear? | Only users who opt into recruiter search.\n"
+               "Do you take UPI? | Yes — pay via UPI / Google Pay.",
+        "pricing_note": "Plans priced ~10% below market. See employer pricing.",
+        "contact_email": "", "contact_phone": "",
+        "contact_note": "Talk to us about hiring on the platform.",
+    },
+}
+
+
+def _audience(a):
+    return "employer" if a == "employer" else "college"
+
+
+def get_landing(db, audience) -> dict:
+    audience = _audience(audience)
+    global _landing_cache
+    if audience in _landing_cache:
+        return _landing_cache[audience]
+
+    data = dict(LANDING_DEFAULTS[audience])
+    if db is not None:
+        try:
+            doc = db.collection("site").document(f"landing_{audience}").get()
+            if doc.exists:
+                stored = doc.to_dict() or {}
+                for key in LANDING_FIELDS:
+                    if (stored.get(key) or "").strip():
+                        data[key] = stored[key]
+        except Exception:
+            pass
+
+    with _lock:
+        _landing_cache[audience] = data
+    return data
+
+
+def save_landing(db, audience, data) -> dict:
+    audience = _audience(audience)
+    payload = {key: (data.get(key) or "").strip() for key in LANDING_FIELDS}
+    db.collection("site").document(f"landing_{audience}").set(payload)
+    invalidate()
+    return payload
 
 
 # --- admin account ---------------------------------------------------------

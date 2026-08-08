@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}{{ c.hero_title }} - {{ site.app_name }}{% endblock %}
+
+{% block content %}
+<div class="landing py-3">
+    <!-- Hero -->
+    <section class="text-center py-4">
+        <span class="badge bg-primary-lt mb-2">{{ 'For Colleges & Institutions' if audience == 'college' else 'For Employers' }}</span>
+        <h1 class="display-6 fw-bold mb-2">{{ c.hero_title }}</h1>
+        <p class="text-secondary fs-3 mb-3" style="max-width:720px;margin:0 auto;">{{ c.hero_subtitle }}</p>
+        <div class="btn-list justify-content-center">
+            <a href="{{ pricing_url }}" class="btn btn-primary btn-lg">
+                {{ 'See pricing' if audience == 'employer' else 'Get started' }}
+            </a>
+            <a href="#contact" class="btn btn-lg">Talk to us</a>
+        </div>
+    </section>
+
+    <!-- Services -->
+    {% if services %}
+    <section class="py-3">
+        <h2 class="text-center mb-3">Services</h2>
+        <div class="row row-cards">
+            {% for s in services %}
+            <div class="col-12 col-md-4">
+                <div class="card h-100"><div class="card-body">
+                    <h3 class="card-title">{{ s.title }}</h3>
+                    <p class="text-secondary mb-0">{{ s.body }}</p>
+                </div></div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Features -->
+    {% if features %}
+    <section class="py-3">
+        <h2 class="text-center mb-3">Features</h2>
+        <div class="row g-2" style="max-width:820px;margin:0 auto;">
+            {% for f in features %}
+            <div class="col-12 col-md-6">
+                <div class="d-flex align-items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon text-success flex-shrink-0" width="20" height="20" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 12l5 5l10 -10"/></svg>
+                    <span>{{ f }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Pricing -->
+    <section class="py-3">
+        <div class="card bg-primary-lt"><div class="card-body d-flex flex-wrap align-items-center gap-3">
+            <div>
+                <h2 class="mb-1">Pricing</h2>
+                <p class="text-secondary mb-0">{{ c.pricing_note }}</p>
+            </div>
+            <a href="{{ pricing_url }}" class="btn btn-primary ms-auto">View pricing</a>
+        </div></div>
+    </section>
+
+    <!-- Support -->
+    {% if c.support %}
+    <section class="py-3">
+        <h2 class="mb-2">Support</h2>
+        <p class="text-secondary">{{ c.support }}</p>
+    </section>
+    {% endif %}
+
+    <!-- FAQ -->
+    {% if faq %}
+    <section class="py-3">
+        <h2 class="mb-3">FAQ</h2>
+        <div class="accordion" id="faq">
+            {% for item in faq %}
+            <div class="accordion-item">
+                <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq{{ loop.index }}">
+                        {{ item.q }}
+                    </button>
+                </h3>
+                <div id="faq{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#faq">
+                    <div class="accordion-body text-secondary">{{ item.a }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Contact -->
+    <section class="py-3" id="contact">
+        <div class="card"><div class="card-body text-center">
+            <h2 class="mb-2">Contact</h2>
+            <p class="text-secondary">{{ c.contact_note }}</p>
+            <div class="btn-list justify-content-center">
+                {% if c.contact_email %}<a href="mailto:{{ c.contact_email }}" class="btn btn-primary">{{ c.contact_email }}</a>{% endif %}
+                {% if c.contact_phone %}<a href="tel:{{ c.contact_phone }}" class="btn btn-ghost-secondary">{{ c.contact_phone }}</a>{% endif %}
+                {% if not c.contact_email and not c.contact_phone %}
+                    <a href="{{ url_for('org_home') }}" class="btn btn-primary">Get started</a>
+                {% endif %}
+            </div>
+        </div></div>
+    </section>
+</div>
+{% endblock %}

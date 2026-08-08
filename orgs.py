@@ -132,6 +132,19 @@ def remove_member(db, org_id, email):
     return True, f"Removed {email}."
 
 
+def bulk_add_members(db, org_id, emails) -> dict:
+    """Add many members at once (CSV import). Returns a summary; each skip keeps
+    its reason (no account, already in an org, no seats)."""
+    added, skipped = 0, []
+    for email in emails:
+        ok, msg = add_member(db, org_id, email)
+        if ok:
+            added += 1
+        else:
+            skipped.append((email, msg))
+    return {"added": added, "skipped": skipped}
+
+
 # --- college: cohort analytics ---------------------------------------------
 
 def _group_by_user(db, collection):
@@ -371,6 +384,9 @@ def search_candidates(db, query="", location="", limit=50) -> list:
     q = (query or "").strip().lower()
     loc = (location or "").strip().lower()
 
+    # Which candidates have a saved resume, in one pass (for the download button).
+    resume_owners = {d.to_dict().get("user_id") for d in db.collection("resumes").stream()}
+
     results = []
     for doc in db.collection("users").stream():
         u = doc.to_dict()
@@ -392,14 +408,16 @@ def search_candidates(db, query="", location="", limit=50) -> list:
 
         skills = [s.strip() for s in re.split(r"[,\n;]+", skills_raw) if s.strip()]
         titles = [t.strip() for t in re.split(r"[,\n;]+", titles_raw) if t.strip()]
+        email = u.get("email") or doc.id
         results.append({
-            "email": u.get("email") or doc.id,
+            "email": email,
             "name": name,
             "headline": titles[0] if titles else "",
             "skills": skills[:12],
             "location": details.get("location", ""),
             "github": details.get("github", ""),
             "linkedin": details.get("linkedin", ""),
+            "has_resume": email in resume_owners,
         })
 
     results.sort(key=lambda r: r["name"].lower())
@@ -415,6 +433,51 @@ def candidate_pool_size(db) -> int:
         if (doc.to_dict().get("details") or {}).get("recruiter_visible"):
             n += 1
     return n
+
+
+def is_visible_candidate(db, email) -> bool:
+    """True only if this user opted into recruiter search - the gate for a
+    recruiter viewing/downloading their resume."""
+    if db is None or not email:
+        return False
+    doc = db.collection("users").document(email).get()
+    return bool(doc.exists and (doc.to_dict().get("details") or {}).get("recruiter_visible"))
+
+
+# --- saved candidate searches ----------------------------------------------
+
+def save_search(db, org_id, created_by, name, query, location) -> str:
+    ref = db.collection("saved_searches").document()
+    ref.set({
+        "org_id": org_id,
+        "created_by": created_by,
+        "name": (name or "").strip() or (query or "Saved search"),
+        "query": (query or "").strip(),
+        "location": (location or "").strip(),
+        "created_at": _now(),
+    })
+    return ref.id
+
+
+def list_searches(db, org_id) -> list:
+    if db is None:
+        return []
+    from dbstore import FieldFilter
+    rows = []
+    for doc in db.collection("saved_searches").where(filter=FieldFilter("org_id", "==", org_id)).stream():
+        s = doc.to_dict()
+        s["id"] = doc.id
+        rows.append(s)
+    rows.sort(key=lambda s: s.get("created_at", 0), reverse=True)
+    return rows
+
+
+def delete_search(db, org_id, search_id) -> bool:
+    doc = db.collection("saved_searches").document(search_id).get()
+    if not doc.exists or doc.to_dict().get("org_id") != org_id:
+        return False
+    db.collection("saved_searches").document(search_id).delete()
+    return True
 
 
 # --- billing (order records; no payment processing) ------------------------
@@ -482,6 +545,28 @@ def list_all_orders(db) -> list:
         rows.append(o)
     rows.sort(key=lambda o: (o.get("status") != "pending", -o.get("created_at", 0)))
     return rows
+
+
+def get_order(db, order_id):
+    if db is None or not order_id:
+        return None
+    doc = db.collection("orders").document(order_id).get()
+    if not doc.exists:
+        return None
+    o = doc.to_dict()
+    o["id"] = order_id
+    return o
+
+
+def mark_order_submitted(db, order_id) -> bool:
+    """Buyer says they've paid (live UPI). Moves it to 'submitted' for an admin
+    to confirm - not 'paid', since a UPI-ID flow has no automatic verification."""
+    order = get_order(db, order_id)
+    if order is None:
+        return False
+    if order.get("status") != "paid":
+        db.collection("orders").document(order_id).update({"status": "submitted"})
+    return True
 
 
 def mark_order_paid(db, order_id) -> bool:

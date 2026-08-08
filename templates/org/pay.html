@@ -1,0 +1,54 @@
+{% extends "org/base.html" %}
+{% set active_org = "billing" %}
+{% block title %}Pay - {{ order.label }}{% endblock %}
+
+{% block content %}
+<div class="py-3" style="max-width: 560px; margin: 0 auto;">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <h1 class="mb-0">Checkout</h1>
+        <a href="{{ url_for('org_billing') }}" class="ms-auto btn btn-ghost-secondary">Back to billing</a>
+    </div>
+
+    <div class="card">
+        <div class="card-body text-center">
+            <div class="text-secondary">{{ order.label }}</div>
+            <div class="display-5 fw-bold my-1">{{ order.currency }}{{ '{:,}'.format(order.amount) }}</div>
+
+            {% if order.status == 'paid' %}
+                <div class="alert alert-success mt-3 mb-0">This order is paid and active.</div>
+            {% elif not pay.upi_id %}
+                <div class="alert alert-warning mt-3 mb-0">
+                    Payments aren't configured yet. The admin needs to set a UPI ID.
+                </div>
+            {% else %}
+                {% if pay.mode == 'test' %}
+                    <div class="badge bg-yellow-lt mb-3">TEST MODE — no real money moves</div>
+                {% endif %}
+
+                <div class="my-3 d-flex justify-content-center">
+                    <div style="width:220px;height:220px;">{{ qr|safe }}</div>
+                </div>
+                <div class="text-secondary small mb-1">Scan with any UPI app, or</div>
+                <a href="{{ upi_uri }}" class="btn btn-primary w-100 mb-2">Pay with UPI / Google Pay</a>
+                <div class="text-secondary small">
+                    Paying to <strong>{{ pay.upi_id }}</strong> ({{ pay.payee_name }})
+                </div>
+
+                <hr>
+                {% if pay.mode == 'test' %}
+                    <form method="POST">
+                        <input type="hidden" name="action" value="simulate">
+                        <button class="btn btn-success w-100">Simulate successful payment</button>
+                    </form>
+                {% else %}
+                    <form method="POST" onsubmit="return confirm('Confirm you have completed the UPI payment?');">
+                        <input type="hidden" name="action" value="submitted">
+                        <button class="btn btn-success w-100">I have paid</button>
+                        <div class="form-hint mt-1">We verify UPI payments manually and then activate your order.</div>
+                    </form>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
