@@ -67,7 +67,7 @@ app = Flask(__name__)
 # Reads from environment; falls back to a dev-only value so local runs don't crash.
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-secret-key-change-me")
 
-GEMINI_MODEL = "gemini-3.5-flash"
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 genai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
@@ -75,7 +75,7 @@ genai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 # free tier instead of Gemini, so it isn't capped by Gemini's 20 req/day quota.
 # Get a key at https://openrouter.ai/keys - no billing required for :free models.
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "openrouter/free")
 openrouter_client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY,

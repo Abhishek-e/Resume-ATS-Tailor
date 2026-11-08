@@ -8,8 +8,7 @@ a package with no prebuilt wheel for the ARMv6 Raspberry Pi it is deployed on.
 This module re-implements just the slice of the Firestore API the app actually
 uses (collection / document / get / set / update / delete / stream / where) on
 top of an ordinary SQL table, so every existing call site keeps working while
-the data now lives in MariaDB (pure-Python PyMySQL, which installs fine on the
-Pi). SQLite is supported too, purely so the suite can run with no server.
+the data can live in PostgreSQL, MariaDB/MySQL, or SQLite.
 
 Storage model
 -------------
@@ -23,6 +22,7 @@ Configuration
 -------------
 DATABASE_URL selects the backend:
     mysql://user:pass@host:3306/dbname      (MariaDB / MySQL, via PyMySQL)
+    postgresql://user:pass@host:5432/dbname (PostgreSQL, via psycopg)
     sqlite:////absolute/path/to/file.db     (local / tests)
 Unset -> connect() returns None and the app runs in its no-database mode.
 """
@@ -190,8 +190,8 @@ class Client:
 
     def __init__(self, conn, backend):
         self._conn = conn
-        self._backend = backend            # 'mysql' | 'sqlite'
-        self._ph = "%s" if backend == "mysql" else "?"
+        self._backend = backend            # 'mysql' | 'postgres' | 'sqlite'
+        self._ph = "%s" if backend in ("mysql", "postgres") else "?"
         self._lock = threading.RLock()
         self._ensure_table()
 
@@ -295,6 +295,11 @@ def _connect_from_url(url):
             autocommit=True,
         )
         return conn, "mysql"
+
+    if scheme in ("postgres", "postgresql"):
+        import psycopg
+        conn = psycopg.connect(url, autocommit=True)
+        return conn, "postgres"
 
     raise ValueError(f"Unsupported DATABASE_URL scheme: {scheme!r}")
 

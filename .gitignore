@@ -4,10 +4,17 @@ serviceAccountKey.json
 .env.*
 # Local and OS files
 .DS_Store
+__pycache__/
+*.py[cod]
 # Editor & tool configs
 .claude/
 # Virtual envs
+.venv/
 venv/
 env/
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
 # Dashboard folder
 flask-dashboard-volt/

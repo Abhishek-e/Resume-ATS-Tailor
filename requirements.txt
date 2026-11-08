@@ -7,9 +7,10 @@ xhtml2pdf
 python-docx
 pypdf
 
-# Datastore: MariaDB/MySQL via the Firestore-compatible shim in dbstore.py.
-# Pure Python, so it installs on the ARMv6 Pi (unlike firebase-admin's grpcio).
+# Datastore drivers used by the Firestore-compatible SQL shim.
 PyMySQL
+# Hosted free-tier option (Aiven/Render PostgreSQL).
+psycopg[binary]
 
 # Google sign-in: verifies the ID token server-side. Pure Python, installs on
 # the Pi. (Also pulled in by google-genai, but pinned here as it is used directly.)
