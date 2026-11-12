@@ -5,7 +5,7 @@ services:
     # packages. Everything here installs from PyPI on the free plan.
     runtime: python
     plan: free
-    healthCheckPath: /
+    healthCheckPath: /health
 
     buildCommand: pip install -r requirements.txt
     # One worker with threads, not multiple processes: the job listing cache

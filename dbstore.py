@@ -29,6 +29,7 @@ Unset -> connect() returns None and the app runs in its no-database mode.
 import json
 import os
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse, unquote
@@ -188,9 +189,10 @@ class Client:
     """The object the app treats as `db`. All access goes through one locked
     connection - fine for a single gunicorn worker with a handful of threads."""
 
-    def __init__(self, conn, backend):
+    def __init__(self, conn, backend, url=None):
         self._conn = conn
         self._backend = backend            # 'mysql' | 'postgres' | 'sqlite'
+        self._url = url
         self._ph = "%s" if backend in ("mysql", "postgres") else "?"
         self._lock = threading.RLock()
         self._ensure_table()
@@ -202,7 +204,18 @@ class Client:
     def _cursor(self):
         if self._backend == "mysql":
             self._conn.ping(reconnect=True)
+        elif self._backend == "postgres" and self._conn.closed:
+            conn, backend = _connect_from_url(self._url)
+            if backend != self._backend:
+                raise RuntimeError("DATABASE_URL backend changed while reconnecting")
+            self._conn = conn
         return self._conn.cursor()
+
+    def ping(self):
+        with self._lock:
+            cur = self._cursor()
+            cur.execute("SELECT 1")
+            return cur.fetchone()[0] == 1
 
     def _ensure_table(self):
         if self._backend == "mysql":
@@ -315,12 +328,17 @@ def connect():
     url = (os.environ.get("DATABASE_URL") or "").strip()
     if not url:
         return None
-    try:
-        conn, backend = _connect_from_url(url)
-        return Client(conn, backend)
-    except Exception as e:  # noqa: BLE001
-        print(f"[WARN] Database not available ({url.split('@')[-1]}): {e}")
-        return None
+    last_error = None
+    for attempt in range(1, 4):
+        try:
+            conn, backend = _connect_from_url(url)
+            return Client(conn, backend, url=url)
+        except Exception as error:  # noqa: BLE001
+            last_error = error
+            if attempt < 3:
+                time.sleep(attempt)
+    print(f"[WARN] Database not available ({url.split('@')[-1]}): {last_error}")
+    return None
 
 
 # Compatibility alias: some call sites did `firestore.client()`.

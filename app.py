@@ -134,6 +134,18 @@ db = _init_db()
 adminstore.ensure_admin(db)
 
 
+@app.get('/health')
+def health():
+    if db is None:
+        return jsonify({'status': 'unhealthy', 'database': 'unavailable'}), 503
+    try:
+        database_ok = db.ping()
+    except Exception:
+        app.logger.exception('Database health check failed')
+        return jsonify({'status': 'unhealthy', 'database': 'unavailable'}), 503
+    return jsonify({'status': 'ok', 'database': 'connected' if database_ok else 'unavailable'}), (200 if database_ok else 503)
+
+
 @app.template_filter('admin_date')
 def _admin_date(epoch):
     """Epoch float -> readable date. Blank for the 0 that means 'never recorded'."""
